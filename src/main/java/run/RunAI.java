@@ -5,6 +5,7 @@ import java.util.List;
 
 import game.Game;
 import AIs.ExampleUCT;
+import AIs.RandomAI;
 import other.AI;
 import other.GameLoader;
 import other.context.Context;
@@ -31,10 +32,11 @@ public class RunAI
 			// Create and init two agents
 			final List<AI> ais = new ArrayList<AI>(3);
 			ais.add(null);
-			for (int j=1; j<=game.players().size(); j++){
-				ais.add(new ExampleUCT());
-				ais.get(j).initAI(game, j);
-			}
+			ais.add(new ExampleUCT());
+			ais.get(1).initAI(game, 1);
+
+			ais.add(new RandomAI());
+			ais.get(2).initAI(game, 2);
 			
 			// This model object is the thing that will handle control flow for us
 			final Model model = context.model();
