@@ -1,5 +1,6 @@
 package run;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,10 +19,18 @@ public class RunAI
 {
 	public static void main(final String[] args)
 	{
-		for (int i=0; i<Integer.valueOf(args[1]); i++)
+		int winrate = 0;
+		for (int i=0; i<Integer.valueOf(args[0]); i++)
 		{
-
-			Game game = GameLoader.loadGameFromName("Breakthrough.lud");
+			Game game;
+			if (args[1] == "normal"){
+				game = GameLoader.loadGameFromName("Breakthrough.lud");
+			} else if (args[1] == "misere"){
+				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_misere.lud"));
+			} else {
+				game = GameLoader.loadGameFromName("Breakthrough.lud");
+				System.out.println("Invalid game type, defaulting to normal");
+			}
 			
 			Trial trial = new Trial(game);
 			Context context = new Context(game, trial);
@@ -93,7 +102,10 @@ public class RunAI
 			
 			// let's see what the result is
 			System.out.println(context.trial().status());
+			if (context.trial().status().winner() == 1)
+				winrate++;
 		}
+		System.out.println("Winrate: " + winrate + "/" + args[0]);
 	}
 }
 
