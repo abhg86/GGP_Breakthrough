@@ -1,22 +1,8 @@
-(game "Breakthrough_misere" 
+(game "Breakthrough_forced" 
     ("TwoPlayersNorthSouth") 
     (equipment { 
         (board (<Tiling:type> <Board:size>)) 
-        (piece "Pawn" Each 
-            (or {
-                "StepForwardToEmpty" 
-                (move 
-                    Step
-                    (directions {FR FL}) 
-                    (to if:(or 
-                            (is Empty (to)) 
-                            ("IsEnemyAt" (to))
-                        ) 
-                        (apply (remove (to)))
-                    )
-                )
-            })
-        )
+        (piece "Pawn" Each )
         (regions P1 (sites Top))
         (regions P2 (sites Bottom))
     }) 
@@ -26,9 +12,36 @@
             (place "Pawn2" (expand (sites Top)))
         })
         
-        (play (forEach Piece))
+        (play 
+            (priority
+                (forEach Piece
+                    (move 
+                        Step
+                        (directions {FR FL}) 
+                        (to if:("IsEnemyAt" (to)) 
+                            (apply (remove (to)))
+                        )
+                    )
+                )
+                (forEach Piece
+                    (or {
+                        "StepForwardToEmpty" 
+                        (move 
+                            Step
+                            (directions {FR FL}) 
+                            (to if:(or 
+                                    (is Empty (to)) 
+                                    ("IsEnemyAt" (to))
+                                ) 
+                                (apply (remove (to)))
+                            )
+                        )
+                    })
+                )                
+            )
+        )
         
-        (end ("ReachWin" (sites Mover) Next)) 
+        (end ("ReachWin" (sites Mover) Mover)) 
     )
 )
 
@@ -59,8 +72,8 @@
     
     (info
         {
-        (description "Invented in 2000 by Dan Troyka, Breakthrough is a Chess variant played only with pawns. The game here is a misere version of Breakthrough")
-        (rules "Played on an 8x8 board with a double contingent of chess pawns. Pieces move forward one orthogonally or diagonally. Pieces can capture by moving diagonally. The first player to reach the opponent's edge of the board lose. A player also lose by default if they capture all of the opponent's pieces.")
+        (description "Invented in 2000 by Dan Troyka, Breakthrough is a Chess variant played only with pawns. The game here is a forced capture version of Breakthrough")
+        (rules "Played on an 8x8 board with a double contingent of chess pawns. Pieces move forward one orthogonally or diagonally. Pieces can capture by moving diagonally. The first player to reach the opponent's edge of the board wins. A player also wins by default if they capture all of the opponent's pieces.")
         (source "<a href=\"https://en.wikipedia.org/wiki/Breakthrough_(board_game)\" target=\"_blank\" class=\"style1\" style=\"color: #0000EE\" />Wikipedia</a>")
         (id "73")
         (version "1.0.0")

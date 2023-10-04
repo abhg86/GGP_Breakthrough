@@ -10,4 +10,4 @@ compile:
 	mvn clean compile
 
 run :
-	mvn exec:java -Dexec.arguments="$(NUM_RUN)"
+	mvn exec:java -Dexec.arguments="$(NUM_RUN),forced"

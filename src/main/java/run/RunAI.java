@@ -23,10 +23,12 @@ public class RunAI
 		for (int i=0; i<Integer.valueOf(args[0]); i++)
 		{
 			Game game;
-			if (args[1] == "normal"){
+			if (args[1].equals("normal")){
 				game = GameLoader.loadGameFromName("Breakthrough.lud");
-			} else if (args[1] == "misere"){
+			} else if (args[1].equals("misere")){
 				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_misere.lud"));
+			} else if (args[1].equals("forced")){
+				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_forced.lud"));
 			} else {
 				game = GameLoader.loadGameFromName("Breakthrough.lud");
 				System.out.println("Invalid game type, defaulting to normal");
