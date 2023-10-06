@@ -1,11 +1,18 @@
+// /!\ This game is not finished yet. It is a work in progress. /!\
+//  As of now the player 2 eats player one if they choose to go on the same tile and a weird thing happen if player goes where the pawn of player two previously was before the simultaneous play.
+// Because, most likely, the game is not really simultaneous but player one first play then player two.
+
+//"ReachWin" does not work with simultaneous games. Probably because of the confusion between player and their belonging regions.
 (define "ReachWinSimultaneous" 
     (if ((!= #2 (difference #2 (sites Occupied by:#1)))  (result #1 Win)))
 )
 
+//"IsEnemyAt" does not work with simultaneous games. Probably because of the confusion between player.
 (define "IsPlayerAt"
     (!= (who at:#2) #1)
 )
 
+//Had to use move instead of move Step because it is needed to separate the moves of the two players in simultaneous mode.
 (define "Move_Simultaneous" 
         (or {
             (move 
