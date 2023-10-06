@@ -1,6 +1,50 @@
 (define "ReachWinSimultaneous" 
     (if ((!= #2 (difference #2 (sites Occupied by:#1)))  (result #1 Win)))
 )
+
+(define "IsPlayerAt"
+    (!= (who at:#2) #1)
+)
+
+(define "Move_Simultaneous" 
+        (or {
+            (move 
+                (from (sites Occupied by:#1))
+                (to (sites Direction from:(from) Forward distance:1) if:(is Empty (to)))
+                #1
+            )
+            (move 
+                (from (sites Occupied by:#1))
+                (to (sites Direction from:(from) FL distance:1)
+                    if:(and
+                            (or 
+                                (is Empty (to)) 
+                                ("IsPlayerAt" #1 (to))
+                            )
+                            (not (= (to) (last To)))
+                        )
+                        (apply (remove (to)))
+                )
+                #1
+            )
+            (move 
+                (from (sites Occupied by:#1))
+                (to (sites Direction from:(from) FR distance:1)
+                    if:(and
+                            (or 
+                                (is Empty (to)) 
+                                ("IsPlayerAt" #1 (to))
+                            )
+                        (not (= (to) (last To)))
+                        )
+                        (apply (remove (to)))
+                )
+                #1
+            )
+        })
+    
+)
+
 //------------------------------------------------------------------------------
 
 (game "Breakthrough_simultaneous" 
@@ -19,38 +63,8 @@
         })
         (play 
             (or {
-            (forEach Piece
-                (or {
-                    "StepForwardToEmpty" 
-                    (move 
-                        Step
-                        (directions {FR FL}) 
-                        (to if:(or 
-                                (is Empty (to)) 
-                                ("IsEnemyAt" (to))
-                            ) 
-                            (apply (remove (to)))
-                        )
-                    )
-                })
-                P1
-            )
-            (forEach Piece 
-                (or {
-                    "StepForwardToEmpty" 
-                    (move 
-                        Step
-                        (directions {FR FL}) 
-                        (to if:(or 
-                                (is Empty (to)) 
-                                ("IsEnemyAt" (to))
-                            ) 
-                            (apply (remove (to)))
-                        )
-                    )
-                })
-                P2
-            )
+                ("Move_Simultaneous" P1)
+                ("Move_Simultaneous" P2)
             })
         )
 
