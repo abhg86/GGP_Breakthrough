@@ -9,5 +9,14 @@ install:
 compile:
 	mvn clean compile
 
-run :
+normal :
+	mvn exec:java -Dexec.arguments="$(NUM_RUN),normal"
+
+forced :
 	mvn exec:java -Dexec.arguments="$(NUM_RUN),forced"
+
+misere :
+	mvn exec:java -Dexec.arguments="$(NUM_RUN),misere"
+
+simultaneous :
+	mvn exec:java -Dexec.arguments="$(NUM_RUN),simultaneous"

@@ -29,6 +29,8 @@ public class RunAI
 				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_misere.lud"));
 			} else if (args[1].equals("forced")){
 				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_forced.lud"));
+			} else if (args[1].equals("simultaneous")){
+				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_simultaneous.lud"));
 			} else {
 				game = GameLoader.loadGameFromName("Breakthrough.lud");
 				System.out.println("Invalid game type, defaulting to normal");
