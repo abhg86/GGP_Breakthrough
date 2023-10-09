@@ -3,7 +3,7 @@ START GAME OPTIONS
 Board/Square
 Board Size/8x8
 END GAME OPTIONS
-RNG internal state=47,-92,38,39,32,102,-4,17
+RNG internal state=1,-15,33,97,45,-45,81,-70
 Move=[Move:mover=0,from=0,to=0,actions=[Add:type=Cell,to=0,what=1]]
 Move=[Move:mover=0,from=1,to=1,actions=[Add:type=Cell,to=1,what=1]]
 Move=[Move:mover=0,from=2,to=2,actions=[Add:type=Cell,to=2,what=1]]
@@ -36,6 +36,9 @@ Move=[Move:mover=0,from=60,to=60,actions=[Add:type=Cell,to=60,what=2]]
 Move=[Move:mover=0,from=61,to=61,actions=[Add:type=Cell,to=61,what=2]]
 Move=[Move:mover=0,from=62,to=62,actions=[Add:type=Cell,to=62,what=2]]
 Move=[Move:mover=0,from=63,to=63,actions=[Add:type=Cell,to=63,what=2]]
+Move=[Move:mover=3,from=0,to=0,actions=[Move:typeFrom=Cell,from=12,typeTo=Cell,to=20,decision=true],[Move:typeFrom=Cell,from=52,typeTo=Cell,to=44,decision=true]]
+Move=[Move:mover=3,from=0,to=0,actions=[Move:typeFrom=Cell,from=20,typeTo=Cell,to=28,decision=true],[Move:typeFrom=Cell,from=53,typeTo=Cell,to=45,decision=true]]
+Move=[Move:mover=3,from=0,to=0,actions=[Move:typeFrom=Cell,from=28,typeTo=Cell,to=36,decision=true],[Move:typeFrom=Cell,from=44,typeTo=Cell,to=36,decision=true]]
 numInitialPlacementMoves=32
 rankings=0.0,0.0,0.0
 SANDBOX=false

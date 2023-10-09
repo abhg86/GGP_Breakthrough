@@ -1,4 +1,4 @@
-(game "Breakthrough_misere" 
+(game "Breakthrough_hidden" 
     ("TwoPlayersNorthSouth") 
     (equipment { 
         (board (<Tiling:type> <Board:size>)) 
@@ -24,11 +24,16 @@
         (start { 
             (place "Pawn1" (expand (sites Bottom)))
             (place "Pawn2" (expand (sites Top)))
+            (set Hidden (difference (sites Board) (sites Occupied by:P1)) to:P1)
+            (set Hidden (difference (sites Board) (sites Occupied by:P2)) to:P2)
         })
         
-        (play (forEach Piece))
+        (play 
+            (forEach Piece)
+            
+        )
         
-        (end ("ReachWin" (sites Mover) Next)) 
+        (end ("ReachWin" (sites Mover) Mover)) 
     )
 )
 
@@ -59,8 +64,8 @@
     
     (info
         {
-        (description "Invented in 2000 by Dan Troyka, Breakthrough is a Chess variant played only with pawns. The game here is a misere version of Breakthrough")
-        (rules "Played on an 8x8 board with a double contingent of chess pawns. Pieces move forward one orthogonally or diagonally. Pieces can capture by moving diagonally. The first player to reach the opponent's edge of the board loses. A player also loses by default if they capture all of the opponent's pieces.")
+        (description "Invented in 2000 by Dan Troyka, Breakthrough is a Chess variant played only with pawns. The game here is a hidden information version of Breakthrough")
+        (rules "Played on an 8x8 board with a double contingent of chess pawns. Pieces move forward one orthogonally or diagonally. Pieces can capture by moving diagonally. The first player to reach the opponent's edge of the board wins. A player also wins by default if they capture all of the opponent's pieces. In this version a player does not see the pieces of the opponent.")
         (source "<a href=\"https://en.wikipedia.org/wiki/Breakthrough_(board_game)\" target=\"_blank\" class=\"style1\" style=\"color: #0000EE\" />Wikipedia</a>")
         (id "73")
         (version "1.0.0")
