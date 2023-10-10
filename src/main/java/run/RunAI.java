@@ -12,6 +12,8 @@ import other.GameLoader;
 import other.context.Context;
 import other.model.Model;
 import other.trial.Trial;
+import utils.LudiiAI;
+import search.mcts.MCTS;
 
 
 
@@ -47,7 +49,7 @@ public class RunAI
 			// Create and init two agents
 			final List<AI> ais = new ArrayList<AI>(3);
 			ais.add(null);
-			ais.add(new ExampleUCT());
+			ais.add(MCTS.createBiasedMCTS(0.3));
 			ais.get(1).initAI(game, 1);
 
 			ais.add(new RandomAI());
