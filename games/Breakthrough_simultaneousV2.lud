@@ -1,6 +1,6 @@
 // /!\ This game is not finished yet. It is a work in progress. /!\
 //  As of now the player 2 eats player one if they choose to go on the same tile and a weird thing happen if player goes where the pawn of player two previously was before the simultaneous play.
-// Because, most likely, the game is not really simultaneous but player one plays first  then player two.
+// Because, most likely, the game is not really simultaneous but player one plays first then player two.
 
 //"ReachWin" does not work with simultaneous games. Probably because of the confusion between players and their belonging regions.
 (define "ReachWinSimultaneous" 
@@ -17,8 +17,14 @@
         (or {
             (move 
                 (from (sites Occupied by:#1))
-                (to (sites Direction from:(from) Forward distance:1) if:(is Empty (to)))
+                (to (sites Direction from:(from) Forward distance:1) 
+                    if:(and 
+                        (is Empty (to)) 
+                        (#2 (to) (from))
+                    )
+                )
                 #1
+                (then (#3 (last From) (last To)))
             )
             (move 
                 (from (sites Occupied by:#1))
@@ -28,12 +34,13 @@
                                 (is Empty (to)) 
                                 ("IsPlayerAt" #1 (to))
                             )
-                            (not (= (to) (last To)))
+                            (#2 (to) (from))
                         )
                         (apply (remove (to)))
                 )
                 #1
-            )
+                (then (#3 (last From) (last To)))
+           )
             (move 
                 (from (sites Occupied by:#1))
                 (to (sites Direction from:(from) FR distance:1)
@@ -42,23 +49,48 @@
                                 (is Empty (to)) 
                                 ("IsPlayerAt" #1 (to))
                             )
-                        (not (= (to) (last To)))
+                            (#2 (to) (from))
                         )
                         (apply (remove (to)))
                 )
                 #1
+                (then (#3 (last From) (last To)))
             )
         })
     
 )
 
+(define "IsOnLeft" 
+    (< (- #1 (* (/ (#1) 16) 16)) 8)
+)
+
+(define "MoveOnLeft"
+    (and ("IsOnLeft" #1) ("IsOnLeft" #2))
+)
+
+(define "IsOnRight" 
+    (>= (- #1 (* (/ (#1) 16) 16)) 8)
+)
+
+(define "MoveOnRight"
+    (and ("IsOnRight" #1) ("IsOnRight" #2))
+)
+
+(define "ReplayOnLeft"
+    (fromTo (from (- #1 8)) (to (- #2 8)))
+)
+
+(define "ReplayOnRight"
+    (fromTo (from (+ 8 #1)) (to (+ 8 #2)))
+)
+
+
 //------------------------------------------------------------------------------
 
 (game "Breakthrough_simultaneous" 
     ("TwoPlayersNorthSouth") 
-    (mode Simultaneous)
     (equipment { 
-        (board (<Tiling:type> <Board:size>)) 
+        (board (square {8 16 8 16}))
         (piece "Pawn" Each )
         (regions P1 (sites Top))
         (regions P2 (sites Bottom))
@@ -70,8 +102,8 @@
         })
         (play 
             (or {
-                ("Move_Simultaneous" P1)
-                ("Move_Simultaneous" P2)
+                ("Move_Simultaneous" P1 "MoveOnLeft" "ReplayOnRight")
+                ("Move_Simultaneous" P2 "MoveOnRight" "ReplayOnLeft")
             })
         )
 
