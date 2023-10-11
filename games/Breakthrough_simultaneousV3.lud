@@ -39,6 +39,7 @@
                         (apply (remove (to)))
                 )
                 P1
+                (then ("FollowingP1Move"))
             )
             (move 
                 (from (sites Occupied by:P1))
@@ -53,6 +54,7 @@
                         (apply (remove (to)))
                 )
                 P1
+                (then ("FollowingP1Move"))
             )
         })
     
@@ -129,11 +131,13 @@
     (fromTo (from (+ 8 #1)) (to (+ 8 #2)))
 )
 
+(define "WhereCount1" 
+    (forEach (sites Board) if:)    
+)
+
 (define "ReplayOnRightConfirmed"
     (and {
-        ("ReplayOnRight" (where "Disc" P1) (where "Cross" P1))
-        (remove (where "Disc" P1))
-        (remove (where "Cross" P1))
+        ("ReplayOnRight" (sites State 1) (sites State 2))
     })
 )
 
@@ -141,15 +145,11 @@
     (set Hidden (forEach (sites Board) if:("IsOnLeft" (site))) to:P2)
 )
 
-(define "HideDisc"
-    (set Hidden at:(where "Disc" P1) to:P1)
-)
 
 (define "FollowingP1Move" 
     (and {
-        (add (piece "Disc1") (to (last From)) ) 
-        (add (piece "Cross1") (to (last To)) )
-        ("HideDisc")
+        (set State at:(last From) 1)
+        (set State at:(last To) 2)
         ("ReplayOnRightConfirmed")
     })
 )
@@ -161,8 +161,6 @@
     (equipment { 
         (board (square {8 16 8 16}))
         (piece "Pawn" Each )
-        (piece "Cross" P1)
-        (piece "Disc" P1)
         (regions P1 (sites Top))
         (regions P2 (sites Bottom))
     }) 
