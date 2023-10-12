@@ -69,6 +69,9 @@
                         (is Empty (to)) 
                         ("MoveOnRight" (to) (from))
                     )
+                    (apply (if ("IsInvalidSimultaneously" (to)) 
+                        (pass)
+                    ))
                 )
                 P2
                 (then ("ReplayOnLeft" (last From) (last To)))
@@ -83,7 +86,7 @@
                             )
                             ("MoveOnRight" (to) (from))
                         )
-                    (apply (remove (to)))
+                    (apply (if ("IsInvalidSimultaneously" (to)) (pass) (remove (to))))
                 )
                 P2
                 (then ("ReplayOnLeft" (last From) (last To)))
@@ -98,7 +101,7 @@
                             )
                             ("MoveOnRight" (to) (from))
                         )
-                    (apply (remove (to)))
+                    (apply (if ("IsInvalidSimultaneously" (to)) (pass) (remove (to))))
                 )
                 P2
                 (then ("ReplayOnLeft" (last From) (last To)))
@@ -151,8 +154,8 @@
     })
 )
 
-(define "IsValidSimultaneously"
-    (not ("IsEnemyAt" (- #1 8)))
+(define "IsInvalidSimultaneously"
+    (and ("IsEnemyAt" (- #1 8)) (= (#1) ("FirstSiteToInt" (sites State 2))))
 )
 
 //------------------------------------------------------------------------------
