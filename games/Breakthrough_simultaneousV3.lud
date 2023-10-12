@@ -36,7 +36,7 @@
                             )
                             ("MoveOnLeft" (to) (from))
                         )
-                        (apply (remove (to)))
+                    (apply (remove (to)))
                 )
                 P1
                 (then ("FollowingP1Move"))
@@ -51,7 +51,7 @@
                             )
                             ("MoveOnLeft" (to) (from))
                         )
-                        (apply (remove (to)))
+                    (apply (remove (to)))
                 )
                 P1
                 (then ("FollowingP1Move"))
@@ -83,7 +83,7 @@
                             )
                             ("MoveOnRight" (to) (from))
                         )
-                        (apply (remove (to)))
+                    (apply (remove (to)))
                 )
                 P2
                 (then ("ReplayOnLeft" (last From) (last To)))
@@ -98,7 +98,7 @@
                             )
                             ("MoveOnRight" (to) (from))
                         )
-                        (apply (remove (to)))
+                    (apply (remove (to)))
                 )
                 P2
                 (then ("ReplayOnLeft" (last From) (last To)))
@@ -131,20 +131,17 @@
     (fromTo (from (+ 8 #1)) (to (+ 8 #2)))
 )
 
-(define "WhereCount1" 
-    (forEach (sites Board) if:)    
-)
-
 (define "ReplayOnRightConfirmed"
     (and {
-        ("ReplayOnRight" (sites State 1) (sites State 2))
+        ("ReplayOnRight" ("FirstSiteToInt" (sites State 1)) ("FirstSiteToInt" (sites State 2)))
+        (forEach Value (array (sites State 1)) (set State at:(value) 0))
+        (forEach Value (array (sites State 2)) (set State at:(value) 0))
     })
 )
 
-(define "HideLeft"
-    (set Hidden (forEach (sites Board) if:("IsOnLeft" (site))) to:P2)
+(define "FirstSiteToInt" 
+    (arrayValue (array #1) index:0)
 )
-
 
 (define "FollowingP1Move" 
     (and {
@@ -152,6 +149,10 @@
         (set State at:(last To) 2)
         ("ReplayOnRightConfirmed")
     })
+)
+
+(define "IsValidSimultaneously"
+    (not ("IsEnemyAt" (- #1 8)))
 )
 
 //------------------------------------------------------------------------------
