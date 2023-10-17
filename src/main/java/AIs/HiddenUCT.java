@@ -1,7 +1,11 @@
 package AIs;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import game.Game;
@@ -15,11 +19,11 @@ import other.trial.Trial;
 
 
 /**
- * A simple example implementation of a standard UCT approach.
+ * A simple implementation of a UCT approach in imperfect information.
  * 
  * Only supports deterministic, alternating-move games.
  * 
- * @author Dennis Soemers
+ * @author Aymeric Behaegel
  */
 
 public class HiddenUCT extends AI{	
@@ -28,8 +32,8 @@ public class HiddenUCT extends AI{
 	/** Our player index */
 	protected int player = -1;
 
-	/** The last layer of the tree */
-	protected ArrayList<Node> lastLayer = new ArrayList<HiddenUCT.Node>();
+	/** The layer of the tree that comes after the current state of the game*/
+	protected Set<Node> followingLayer = new HashSet<>();
 
 	/** The root node of the tree */
 	protected Node root = null;
@@ -69,6 +73,7 @@ public class HiddenUCT extends AI{
 
 		// Moves played before the current state of the game
 		List<Move> realMoves = context.trial().generateCompleteMovesList();
+		List<Context> realContexts = new ArrayList<Context>();
 		
 		// Our main loop through MCTS iterations
 		while 
@@ -80,6 +85,9 @@ public class HiddenUCT extends AI{
 		{
 			// Start in root node
 			Node current = root;
+			if (realContexts.isEmpty()){
+				realContexts.add(startingContext);
+			}
 			Context realContext = new Context(startingContext);
 			
 			int nbMoves = 0;
@@ -93,7 +101,15 @@ public class HiddenUCT extends AI{
 				}
 
 				if (nbMoves < realMoves.size()){
-					realContext.game().apply(realContext, realMoves.get(nbMoves));
+					if (nbMoves < realContexts.size() -1){
+						realContext = realContexts.get(nbMoves);
+					}
+					else {
+						realContext = new Context(realContext);
+						realContext.game().apply(realContext, realMoves.get(nbMoves));
+						realContexts.add(realContext);
+					}
+
 					if (current.context.state().mover() == player ){
 					// We're in a node corresponding to a move of the player that has already been played
 					current = select(current, realMoves.get(nbMoves), realContext);
@@ -104,6 +120,8 @@ public class HiddenUCT extends AI{
 				} else {
 					// We're in a node corresponding to after the current state of the game
 					current = select(current, null, null);
+
+					if (nbMoves == realMoves.size()) { followingLayer.add(current);}
 				}
 				
 				if (current.visitCount == 0)
@@ -263,115 +281,24 @@ public class HiddenUCT extends AI{
 	
 	/**
 	 * Selects the move we wish to play using the "Robust Child" strategy
-	 * (meaning that we play the move leading to the child of the root node
-	 * with the highest visit count).
+	 * (meaning that we play the move leading to the nodes
+	 * with the highest visit counts).
 	 * 
 	 * @param rootNode
 	 * @return
 	 */
-	public static Move finalMoveSelection(final Node rootNode)
+	public Move finalMoveSelection(final Node rootNode)
 	{
-		Node bestChild = null;
-        int bestVisitCount = Integer.MIN_VALUE;
-        int numBestFound = 0;
-        
-        final int numChildren = rootNode.children.size();
-
-        for (int i = 0; i < numChildren; ++i) 
-        {
-        	final Node child = rootNode.children.get(i);
-        	final int visitCount = child.visitCount;
-            
-            if (visitCount > bestVisitCount)
-            {
-                bestVisitCount = visitCount;
-                bestChild = child;
-                numBestFound = 1;
-            }
-            else if 
-            (
-            	visitCount == bestVisitCount && 
-            	ThreadLocalRandom.current().nextInt() % ++numBestFound == 0
-            )
-            {
-            	// this case implements random tie-breaking
-            	bestChild = child;
-            }
-        }
-        
-        return bestChild.moveFromParent;
-	}
-
-	public Node createTree(Context context){
-		Trial trial = new Trial(context.game());
-		Context startingContext = new Context(context.game(), trial);
-		final Node root = new Node(null, null, startingContext);
-
-		List<Move> moveGame = context.trial().generateCompleteMovesList();
-		Context predictedContext = new Context(startingContext);
-		ArrayList<Node> lastLayer = new ArrayList<HiddenUCT.Node>();
-		lastLayer.add(root);
-		Context realContext = new Context(startingContext);
-		
-		for (Move move : moveGame){
-			// No need to try and catch because it is the game played so it's all legal moves
-			realContext.game().apply(realContext, move);
-
-			ArrayList<Node> actualNodes = new ArrayList<HiddenUCT.Node>(lastLayer);
-			lastLayer.clear();
-
-			if (move.playerSelected() == player){
-				for (Node actualNode : actualNodes){
-					predictedContext = new Context(actualNode.context);
-					try {
-						predictedContext.game().apply(predictedContext, move);
-						if (isCoherent(realContext, predictedContext)){
-							Node newNode = new Node(actualNode, move, predictedContext);
-							lastLayer.add(newNode);
-							newNode.visitCount = 1;
-						}
-						else {
-							Node impossibleNode = new Node(actualNode, move, predictedContext);
-							impossibleNode.visitCount = Integer.MAX_VALUE;
-							impossibleNode.scoreSums[player] = Integer.MIN_VALUE;
-							impossibleNode.unexpandedMoves.clear();
-						}
-					} catch (Exception e) {
-						// System.out.println("Impossible move");	
-					}
-
-				}
-			}
-			else {
-				for (Node actualNode : actualNodes){
-					for (int i=0; i<actualNode.unexpandedMoves.size(); i++){
-						Move move2 = actualNode.unexpandedMoves.remove(i);
-						predictedContext = new Context(actualNode.context);
-						try {
-							predictedContext.game().apply(predictedContext, move2);
-							if (isCoherent(realContext, predictedContext)){
-								Node newNode = new Node(actualNode, move, predictedContext);
-								lastLayer.add(newNode);
-								newNode.visitCount = 1;
-								// Only the known move of the player is interesting, no need for UCT to explore other moves
-								newNode.unexpandedMoves.clear();
-							}
-							else {
-								Node impossibleNode = new Node(actualNode, move, predictedContext);
-								impossibleNode.visitCount = Integer.MAX_VALUE;
-								impossibleNode.scoreSums[player] = Integer.MIN_VALUE;
-								impossibleNode.unexpandedMoves.clear();
-							}
-						} catch (Exception e) {
-							// System.out.println("Impossible move");	
-						}						
-					}
-				}
+		Map<Move, Integer> moveVisits = new HashMap<>();
+		for (Node node : followingLayer) {
+			if (moveVisits.containsKey(node.moveFromParent)){
+				moveVisits.put(node.moveFromParent, moveVisits.get(node.moveFromParent) + node.visitCount);
+			} else {
+				moveVisits.put(node.moveFromParent, node.visitCount);
 			}
 		}
 
-		this.lastLayer = lastLayer;
-		return root;
+		return moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
 	}
 
 	private boolean isCoherent(Context context, Context predictedContext){
@@ -407,7 +334,7 @@ public class HiddenUCT extends AI{
 	/**
 	 * Inner class for nodes used by Hidden UCT
 	 * 
-	 * @author Dennis Soemers
+	 * @author Aymeric Behaegel
 	 */
 	private static class Node
 	{

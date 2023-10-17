@@ -6,6 +6,7 @@ import java.util.List;
 
 import game.Game;
 import AIs.ExampleUCT;
+import AIs.HiddenUCT;
 import AIs.RandomAI;
 import other.AI;
 import other.GameLoader;
@@ -49,7 +50,8 @@ public class RunAI
 			// Create and init two agents
 			final List<AI> ais = new ArrayList<AI>(3);
 			ais.add(null);
-			ais.add(MCTS.createBiasedMCTS(0.3));
+			// ais.add(MCTS.createBiasedMCTS(0.3));
+			ais.add(new HiddenUCT());
 			ais.get(1).initAI(game, 1);
 
 			ais.add(new RandomAI());

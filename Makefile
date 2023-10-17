@@ -22,4 +22,4 @@ simultaneous :
 	mvn exec:java -Dexec.arguments="$(NUM_RUN),simultaneous"
 
 hidden :
-	mvn exec:java -Dexec.arguments="$(NUM_RUN),hidden"
+	mvn -e exec:java -Dexec.arguments="$(NUM_RUN),hidden"
