@@ -14,99 +14,99 @@
 
 //Had to use move instead of move Step because it is needed to separate the moves of the two players in simultaneous mode.
 (define "MoveSimultaneousFirst" 
-        (or {
-            (move 
-                (from (sites Occupied by:P1))
-                (to (sites Direction from:(from) Forward distance:1) 
-                    if:(and 
-                        (is Empty (to)) 
+    (or {
+        (move 
+            (from (sites Occupied by:P1))
+            (to (sites Direction from:(from) Forward distance:1) 
+                if:(and 
+                    (is Empty (to)) 
+                    ("MoveOnLeft" (to) (from))
+                )
+            )
+            P1
+            (then ("FollowingP1Move"))
+        )
+        (move 
+            (from (sites Occupied by:P1))
+            (to (sites Direction from:(from) FL distance:1)
+                if:(and
+                        (or 
+                            (is Empty (to)) 
+                            ("IsPlayerAt" P1 (to))
+                        )
                         ("MoveOnLeft" (to) (from))
                     )
-                )
-                P1
-                (then ("FollowingP1Move"))
+                (apply (remove (to)))
             )
-            (move 
-                (from (sites Occupied by:P1))
-                (to (sites Direction from:(from) FL distance:1)
-                    if:(and
-                            (or 
-                                (is Empty (to)) 
-                                ("IsPlayerAt" P1 (to))
-                            )
-                            ("MoveOnLeft" (to) (from))
+            P1
+            (then ("FollowingP1Move"))
+        )
+        (move 
+            (from (sites Occupied by:P1))
+            (to (sites Direction from:(from) FR distance:1)
+                if:(and
+                        (or 
+                            (is Empty (to)) 
+                            ("IsPlayerAt" P1 (to))
                         )
-                    (apply (remove (to)))
-                )
-                P1
-                (then ("FollowingP1Move"))
+                        ("MoveOnLeft" (to) (from))
+                    )
+                (apply (remove (to)))
             )
-            (move 
-                (from (sites Occupied by:P1))
-                (to (sites Direction from:(from) FR distance:1)
-                    if:(and
-                            (or 
-                                (is Empty (to)) 
-                                ("IsPlayerAt" P1 (to))
-                            )
-                            ("MoveOnLeft" (to) (from))
-                        )
-                    (apply (remove (to)))
-                )
-                P1
-                (then ("FollowingP1Move"))
-            )
-        })
+            P1
+            (then ("FollowingP1Move"))
+        )
+    })
     
 )
 
 (define "MoveSimultaneousSecond" 
-        (or {
-            (move 
-                (from (sites Occupied by:P2))
-                (to (sites Direction from:(from) Forward distance:1) 
-                    if:(and 
-                        (is Empty (to)) 
+    (or {
+        (move 
+            (from (sites Occupied by:P2))
+            (to (sites Direction from:(from) Forward distance:1) 
+                if:(and 
+                    (is Empty (to)) 
+                    ("MoveOnRight" (to) (from))
+                )
+                (apply (if ("IsInvalidSimultaneously" (to)) 
+                    (pass)
+                ))
+            )
+            P2
+            (then ("ReplayOnLeft" (last From) (last To)))
+        )
+        (move 
+            (from (sites Occupied by:P2))
+            (to (sites Direction from:(from) FL distance:1)
+                if:(and
+                        (or 
+                            (is Empty (to)) 
+                            ("IsPlayerAt" P2 (to))
+                        )
                         ("MoveOnRight" (to) (from))
                     )
-                    (apply (if ("IsInvalidSimultaneously" (to)) 
-                        (pass)
-                    ))
-                )
-                P2
-                (then ("ReplayOnLeft" (last From) (last To)))
+                (apply (if ("IsInvalidSimultaneously" (to)) (pass) (remove (to))))
             )
-            (move 
-                (from (sites Occupied by:P2))
-                (to (sites Direction from:(from) FL distance:1)
-                    if:(and
-                            (or 
-                                (is Empty (to)) 
-                                ("IsPlayerAt" P2 (to))
-                            )
-                            ("MoveOnRight" (to) (from))
+            P2
+            (then ("ReplayOnLeft" (last From) (last To)))
+        )
+        (move 
+            (from (sites Occupied by:P2))
+            (to (sites Direction from:(from) FR distance:1)
+                if:(and
+                        (or 
+                            (is Empty (to)) 
+                            ("IsPlayerAt" P2 (to))
                         )
-                    (apply (if ("IsInvalidSimultaneously" (to)) (pass) (remove (to))))
-                )
-                P2
-                (then ("ReplayOnLeft" (last From) (last To)))
-           )
-            (move 
-                (from (sites Occupied by:P2))
-                (to (sites Direction from:(from) FR distance:1)
-                    if:(and
-                            (or 
-                                (is Empty (to)) 
-                                ("IsPlayerAt" P2 (to))
-                            )
-                            ("MoveOnRight" (to) (from))
-                        )
-                    (apply (if ("IsInvalidSimultaneously" (to)) (pass) (remove (to))))
-                )
-                P2
-                (then ("ReplayOnLeft" (last From) (last To)))
+                        ("MoveOnRight" (to) (from))
+                    )
+                (apply (if ("IsInvalidSimultaneously" (to)) (pass) (remove (to))))
             )
-        })
+            P2
+            (then ("ReplayOnLeft" (last From) (last To)))
+        )
+    })
     
 )
 
@@ -154,6 +154,7 @@
     })
 )
 
+// #1 = to
 (define "IsInvalidSimultaneously"
     (and ("IsEnemyAt" (- #1 8)) (= (#1) ("FirstSiteToInt" (sites State 2))))
 )

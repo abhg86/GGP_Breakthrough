@@ -1,0 +1,273 @@
+// #1 = site to check
+(define "IsOnLeft" 
+    (< (- #1 (* (/ (#1) 16) 16)) 8)
+)
+
+// #1 = (from) to check
+// #2 = (to) to check
+(define "MoveOnLeft"
+    (and ("IsOnLeft" #1) ("IsOnLeft" #2))
+)
+
+// #1 = site to check
+(define "IsOnRight" 
+    (>= (- #1 (* (/ (#1) 16) 16)) 8)
+)
+
+// #1 = (from) to check
+// #2 = (to) to check
+(define "MoveOnRight"
+    (and ("IsOnRight" #1) ("IsOnRight" #2))
+)
+
+// #1 = (from) played
+// #2 = (to) played
+(define "ReplayOnLeft"
+    (fromTo (from (- #1 8)) (to (- #2 8)))
+)
+
+// #1 = (from) played
+// #2 = (to) played
+(define "ReplayOnRight"
+    (fromTo (from (+ 8 #1)) (to (+ 8 #2)))
+)
+
+(define "MarkMove"
+    (and  {
+        (set State at:(last From) 4)
+        (set State at:(last To) 5)
+    })
+)
+
+// #1 = list of sites
+(define "FirstSiteToInt" 
+    (arrayValue (array #1) index:0)
+)
+
+(define "MoveLeft"
+    (or {
+        (move 
+            (from (sites Occupied by:P1))
+            (to (sites Direction from:(from) Forward distance:1) 
+                if:(and 
+                    (not ("IsFriendAt" (to)))
+                    ("MoveOnLeft" (to) (from))
+                )
+            )
+            P1
+            (then (and ("MarkMove") (moveAgain)))
+        )
+        (move 
+            (from (sites Occupied by:P1))
+            (to (sites Direction from:(from) FL distance:1)
+                if:(and
+                    (not ("IsFriendAt" (to)))
+                    ("MoveOnLeft" (to) (from))
+                )
+                (apply (and (remove (to)) ("ReplayOnRight" (from) (to))))
+            )
+            P1
+            (then (moveAgain))
+        )
+        (move 
+            (from (sites Occupied by:P1))
+            (to (sites Direction from:(from) FR distance:1)
+                if:(and
+                    (not ("IsFriendAt" (to))) 
+                    ("MoveOnLeft" (to) (from))
+                )
+                (apply (and (remove (to)) ("ReplayOnRight" (from) (to))))
+            )
+            P1
+            (then (moveAgain))
+        )
+    })
+)
+
+(define "MoveRight"
+    (or {
+        (move 
+            (from (sites Occupied by:P2))
+            (to (sites Direction from:(from) Forward distance:1) 
+                if:(and 
+                    (not ("IsFriendAt" (to)))
+                    ("MoveOnRight" (to) (from))
+                )
+            )
+            P2
+            (then (and ("MarkMove") (moveAgain)))
+        )
+        (move 
+            (from (sites Occupied by:P2))
+            (to (sites Direction from:(from) FL distance:1)
+                if:(and
+                    (not ("IsFriendAt" (to)))
+                    ("MoveOnRight" (to) (from))
+                )
+                (apply (and (remove (to)) ("ReplayOnLeft" (from) (to))))
+            )
+            P2
+            (then (moveAgain))
+        )
+        (move 
+            (from (sites Occupied by:P2))
+            (to (sites Direction from:(from) FR distance:1)
+                if:(and
+                    (not ("IsFriendAt" (to))) 
+                    ("MoveOnRight" (to) (from))
+                )
+                (apply (and (remove (to)) ("ReplayOnLeft" (from) (to))))
+            )
+            P2
+            (then (moveAgain))
+        )
+    })
+)
+
+(define "FixOnLeft"
+    (pass (then 
+        (and {
+            (fromTo
+                (from (+ ("FirstSiteToInt" (sites State 4)) 8))
+                (to (+ ("FirstSiteToInt" (sites State 5)) 8)
+                    if:(not ("IsEnemyAt" (to)))
+                )
+                P1
+                (then (set Counter))
+            )
+            (fromTo 
+                (from (sites State 5))
+                (to (sites State 4)
+                    if:("IsEnemyAt" (+ (to) 8))
+                )
+                P1
+                (then (and {
+                    (add (piece (next)) (to (from)))
+                    (set Hidden at:(from) to:Mover)
+                }))
+            )
+            (forEach Value (array (sites State 4)) (set State at:(value) 0))
+            (forEach Value (array (sites State 5)) (set State at:(value) 0))
+        })
+    ))
+)
+
+(define "FixOnRight"
+    (pass (then
+        (and {
+            (fromTo
+                (from (- ("FirstSiteToInt" (sites State 4)) 8))
+                (to (- ("FirstSiteToInt" (sites State 5)) 8)
+                    if:(not ("IsEnemyAt" (to)))
+                )
+                P2
+            )
+            (fromTo 
+                (from (sites State 5))
+                (to (sites State 4)
+                    if:("IsEnemyAt" (- (to) 8))
+                )
+                P2
+                (then (and {
+                    (add (piece (next)) (to (from)))
+                    (set Hidden at:(from) to:Mover)
+                }))
+            )
+            (forEach Value (array (sites State 4)) (set State at:(value) 0))
+            (forEach Value (array (sites State 5)) (set State at:(value) 0))
+        })
+    ))
+)
+
+
+
+
+//------------------------------------------------------------------------------
+
+(game "Breakthrough_hidden" 
+    ("TwoPlayersNorthSouth") 
+    (equipment { 
+        (board (square {8 16 8 16}))
+        (piece "Pawn" Each )
+        (regions P1 (sites Top))
+        (regions P2 (sites Bottom))
+    }) 
+    (rules 
+        (start { 
+            (place "Pawn1" (expand (sites Bottom)))
+            (place "Pawn2" (expand (sites Top)))
+            (set Hidden (forEach (sites Board) if:("IsOnLeft" (site))) to:P2)
+            (set Hidden (forEach (sites Board) if:("IsOnRight" (site))) to:P1)
+            (set Hidden (difference (sites Board) (sites Occupied by:P1)) to:P1)
+            (set Hidden (difference (sites Board) (sites Occupied by:P2)) to:P2)
+        })
+
+        (play 
+            (if (is Even (count Moves))
+                (if (is Mover P1) 
+                    "MoveLeft"
+                    "MoveRight"
+                )
+                (if (is Mover P1) 
+                    "FixOnLeft"
+                    "FixOnRight"
+                )
+            )
+        )
+
+        
+        (end {
+            ("ReachWin" (sites Mover) Mover)
+            (if (= (counter) 5) (result Mover Draw))
+        }) 
+    )
+)
+
+//------------------------------------------------------------------------------
+
+(option "Board" <Tiling> args:{ <type> }
+    {
+    (item "Square" <square> "The board is tiling by square.")* 
+    (item "Hexagon" <hex> "The board is tiling by hexagon.") 
+})
+
+(option "Board Size" <Board> args:{ <size> }
+    {
+    (item "4x4" <4> "The game is played on a 4x4 board.") 
+    (item "5x5" <5> "The game is played on a 5x5 board.") 
+    (item "6x6" <6> "The game is played on a 6x6 board.") 
+    (item "7x7" <7> "The game is played on a 7x7 board.") 
+    (item "8x8" <8> "The game is played on a 8x8 board.")* 
+    (item "9x9" <9> "The game is played on a 9x9 board.") 
+    (item "10x10" <10> "The game is played on a 10x10 board.") 
+    (item "11x11" <11> "The game is played on a 11x11 board.") 
+    (item "12x12" <12> "The game is played on a 12x12 board.") 
+})
+
+//------------------------------------------------------------------------------
+
+(metadata
+    
+    (info
+        {
+        (description "Invented in 2000 by Dan Troyka, Breakthrough is a Chess variant played only with pawns. The game here is a hidden information version of Breakthrough")
+        (rules "Played on an 8x8 board with a double contingent of chess pawns. Pieces move forward one orthogonally or diagonally. Pieces can capture by moving diagonally. The first player to reach the opponent's edge of the board wins. A player also wins by default if they capture all of the opponent's pieces. In this version a player does not see the pieces of the opponent.")
+        (source "<a href=\"https://en.wikipedia.org/wiki/Breakthrough_(board_game)\" target=\"_blank\" class=\"style1\" style=\"color: #0000EE\" />Wikipedia</a>")
+        (id "73")
+        (version "1.0.0")
+        (classification "board/race/reach")
+        (publisher "LIP6")
+        (credit "Aymeric Behaegel")
+        (date "2023")
+        }
+    )
+    
+    (graphics {
+        (board Style Chess)
+    })
+    
+    (ai 
+        "Breakthrough_ai"
+    )
+    
+)

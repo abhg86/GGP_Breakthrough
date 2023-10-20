@@ -52,7 +52,9 @@ public class RandomAI extends AI
 			legalMoves = AIUtils.extractMovesForMover(legalMoves, player);
 		
 		final int r = ThreadLocalRandom.current().nextInt(legalMoves.size());
-		return legalMoves.get(r);
+		Move move = legalMoves.get(r);
+		System.out.println("Random AI selected move: " + move);
+		return move;
 	}
 	
 	@Override
