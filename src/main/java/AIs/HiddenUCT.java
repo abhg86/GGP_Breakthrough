@@ -60,11 +60,17 @@ public class HiddenUCT extends AI{
 		final int maxDepth
 	)
 	{
-		// Start out by creating a new root node (no tree reuse in this example)
-		Trial trial = new Trial(context.game());
-		Context startingContext = new Context(context.game(), trial);
-		game.start(startingContext);
-		root = new Node(null, null, startingContext);
+		// Return the only available action if there is only one (for example for a pass)
+		if (context.game().moves(context).moves().size() == 1)
+			return context.game().moves(context).moves().get(0);
+
+		// Start out by creating a new root node if it doesn't exist yet
+		if (root == null){
+			Trial trial = new Trial(context.game());
+			Context startingContext = new Context(context.game(), trial);
+			game.start(startingContext);
+			root = new Node(null, null, startingContext);
+		}
 		
 		// We'll respect any limitations on max seconds and max iterations (don't care about max depth)
 		final long stopTime = (maxSeconds > 0.0) ? System.currentTimeMillis() + (long) (maxSeconds * 1000L) : Long.MAX_VALUE;
@@ -74,6 +80,7 @@ public class HiddenUCT extends AI{
 
 		// Moves played before the current state of the game
 		List<Move> realMoves = context.trial().generateRealMovesList();
+		System.out.println("Real moves : " + realMoves);
 		List<Context> realContexts = new ArrayList<Context>();
 		
 		// Our main loop through MCTS iterations
@@ -87,9 +94,9 @@ public class HiddenUCT extends AI{
 			// Start in root node
 			Node current = root;
 			if (realContexts.isEmpty()){
-				realContexts.add(startingContext);
+				realContexts.add(root.context);
 			}
-			Context realContext = new Context(startingContext);
+			Context realContext = new Context(root.context);
 			
 			int nbMoves = 0;
 			// Traverse tree
@@ -179,15 +186,15 @@ public class HiddenUCT extends AI{
 		
 		// Return the move we wish to play
 		Move chosenMove = finalMoveSelection(context);
-		return chosenMove;
+		// return chosenMove;
 
-		// final Context contextFinal = new Context(context);
-		// if (game.moves(contextFinal).moves().contains(chosenMove)){
-		// 	return chosenMove;
-		// }
-		// else {
-		// 	return game.moves(contextFinal).moves().get(0);
-		// }
+		final Context contextFinal = new Context(context);
+		if (game.moves(contextFinal).moves().contains(chosenMove)){
+			return chosenMove;
+		}
+		else {
+			return game.moves(contextFinal).moves().get(0);
+		}
 	}
 	
 	/**
@@ -334,6 +341,10 @@ public class HiddenUCT extends AI{
 			return true;
 		}
 		else {
+			// if (context.trial().numMoves() > 3){
+			// 	System.out.println("Coherent : " + context.state().owned().sites(player));
+			// 	System.out.println("Predicted : " + predictedContext.state().owned().sites(player));
+			// }
 			return false;
 		}
 	}

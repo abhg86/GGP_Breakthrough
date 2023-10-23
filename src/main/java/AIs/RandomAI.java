@@ -53,7 +53,6 @@ public class RandomAI extends AI
 		
 		final int r = ThreadLocalRandom.current().nextInt(legalMoves.size());
 		Move move = legalMoves.get(r);
-		System.out.println("Random AI selected move: " + move);
 		return move;
 	}
 	
