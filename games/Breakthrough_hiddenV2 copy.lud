@@ -23,13 +23,13 @@
 // #1 = (from) played
 // #2 = (to) played
 (define "ReplayOnLeft"
-    (fromTo (from (- #1 8)) (to (- #2 8)))
+    (fromTo (from (- #1 8)) (to (- #2 8) (apply (remove (to)))))
 )
 
 // #1 = (from) played
 // #2 = (to) played
 (define "ReplayOnRight"
-    (fromTo (from (+ 8 #1)) (to (+ 8 #2)))
+    (fromTo (from (+ 8 #1)) (to (+ 8 #2) (apply (remove (to)))))
 )
 
 (define "MarkMove"
@@ -54,7 +54,6 @@
                     ("MoveOnLeft" (to) (from))
                 )
             )
-            P1
             (then ("FixOnLeft"))
         )
         (move 
@@ -66,8 +65,7 @@
                 )
                 (apply (and (remove (to)) ("ReplayOnRight" (from) (to))))
             )
-            P1
-            (then ("FixOnLeft"))
+            (then (set Counter))
         )
         (move 
             (from (sites Occupied by:P1))
@@ -78,8 +76,7 @@
                 )
                 (apply (and (remove (to)) ("ReplayOnRight" (from) (to))))
             )
-            P1
-            (then ("FixOnLeft"))
+            (then (set Counter))
         )
     })
 )
@@ -94,7 +91,6 @@
                     ("MoveOnRight" (to) (from))
                 )
             )
-            P2
             (then ("FixOnRight"))
         )
         (move 
@@ -106,7 +102,7 @@
                 )
                 (apply (and (remove (to)) ("ReplayOnLeft" (from) (to))))
             )
-            (then ("FixOnRight"))
+            (then (set Counter))
         )
         (move 
             (from (sites Occupied by:P2))
@@ -117,7 +113,7 @@
                 )
                 (apply (and (remove (to)) ("ReplayOnLeft" (from) (to))))
             )
-            (then ("FixOnRight"))
+            (then (set Counter))
         )
     })
 )
@@ -136,7 +132,7 @@
         (fromTo 
             (from (sites State 2))
             (to (sites State 1)
-                if:("IsEnemyAt" (+ (to) 8))
+                if:("IsEnemyAt" (+ (last To) 8))
             )
             (then (and {
                 (add (piece (next)) (to (from)))
@@ -152,24 +148,8 @@
     (and {
         (set State at:(last From) 1)
         (set State at:(last To) 2)
-        (fromTo
-            (from (- ("FirstSiteToInt" (sites State 1)) 8))
-            (to (- ("FirstSiteToInt" (sites State 2)) 8)
-                if:(not ("IsEnemyAt" (to)))
-            )
-            P2
-        )
-        (fromTo 
-            (from (sites State 2))
-            (to (sites State 1)
-                if:("IsEnemyAt" (- (to) 8))
-            )
-            P2
-            (then (and {
-                (add (piece (next)) (to (from)))
-                (set Hidden at:(from) to:Mover)
-            }))
-        )
+        (add (piece (next)) (to (sites State 1)))
+        
         (forEach Value (array (sites State 1)) (set State at:(value) 0))
         (forEach Value (array (sites State 2)) (set State at:(value) 0))
     })

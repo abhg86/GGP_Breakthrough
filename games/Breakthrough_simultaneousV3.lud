@@ -154,7 +154,7 @@
     })
 )
 
-// #1 = to
+// #1 = to (on the right)
 (define "IsInvalidSimultaneously"
     (and ("IsEnemyAt" (- #1 8)) (= (#1) ("FirstSiteToInt" (sites State 2))))
 )

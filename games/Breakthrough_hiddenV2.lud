@@ -23,13 +23,13 @@
 // #1 = (from) played
 // #2 = (to) played
 (define "ReplayOnLeft"
-    (fromTo (from (- #1 8)) (to (- #2 8)))
+    (fromTo (from (- #1 8)) (to (- #2 8) (apply (remove (to)))))
 )
 
 // #1 = (from) played
 // #2 = (to) played
 (define "ReplayOnRight"
-    (fromTo (from (+ 8 #1)) (to (+ 8 #2)))
+    (fromTo (from (+ 8 #1)) (to (+ 8 #2) (apply (remove (to)))))
 )
 
 (define "MarkMove"
@@ -53,6 +53,7 @@
                     (not ("IsFriendAt" (to)))
                     ("MoveOnLeft" (to) (from))
                 )
+                (apply (remove (to)))
             )
             P1
             (then (and ("MarkMove") (moveAgain)))
@@ -67,7 +68,7 @@
                 (apply (and (remove (to)) ("ReplayOnRight" (from) (to))))
             )
             P1
-            (then (moveAgain))
+            (then (and (set Counter) (moveAgain)))
         )
         (move 
             (from (sites Occupied by:P1))
@@ -79,7 +80,7 @@
                 (apply (and (remove (to)) ("ReplayOnRight" (from) (to))))
             )
             P1
-            (then (moveAgain))
+            (then (and (set Counter) (moveAgain)))
         )
     })
 )
@@ -107,7 +108,7 @@
                 (apply (and (remove (to)) ("ReplayOnLeft" (from) (to))))
             )
             P2
-            (then (moveAgain))
+            (then (and (set Counter) (moveAgain)))
         )
         (move 
             (from (sites Occupied by:P2))
@@ -119,7 +120,7 @@
                 (apply (and (remove (to)) ("ReplayOnLeft" (from) (to))))
             )
             P2
-            (then (moveAgain))
+            (then (and (set Counter) (moveAgain)))
         )
     })
 )
@@ -136,14 +137,15 @@
                 (then (set Counter))
             )
             (fromTo 
-                (from (sites State 5))
-                (to (sites State 4)
-                    if:("IsEnemyAt" (+ (to) 8))
+                (from ("FirstSiteToInt" (sites State 5)))
+                (to ("FirstSiteToInt" (sites State 4))
+                    if:("IsEnemyAt" (+ ("FirstSiteToInt" (sites State 5)) 8))
                 )
                 P1
+                // It seems that the piece moved the state of the cell with it during the fromTo, so we rectify the coordinates 
                 (then (and {
-                    (add (piece (next)) (to (from)))
-                    (set Hidden at:(from) to:Mover)
+                    (add (piece (next)) (to (+ ("FirstSiteToInt" (sites State 5)) 16)))
+                    (set Hidden at:(+ ("FirstSiteToInt" (sites State 5)) 16) to:All)
                 }))
             )
             (forEach Value (array (sites State 4)) (set State at:(value) 0))
@@ -161,16 +163,18 @@
                     if:(not ("IsEnemyAt" (to)))
                 )
                 P2
+                (then (set Counter))
             )
             (fromTo 
-                (from (sites State 5))
-                (to (sites State 4)
-                    if:("IsEnemyAt" (- (to) 8))
+                (from ("FirstSiteToInt" (sites State 5)))
+                (to ("FirstSiteToInt" (sites State 4))
+                    if:("IsEnemyAt" (- (from) 8))
                 )
                 P2
+                // It seems that the piece moved the state of the cell with it during the fromTo, so we rectify the coordinates 
                 (then (and {
-                    (add (piece (next)) (to (from)))
-                    (set Hidden at:(from) to:Mover)
+                    (add (piece (next)) (to (- ("FirstSiteToInt" (sites State 5)) 16)))
+                    (set Hidden at:(- ("FirstSiteToInt" (sites State 5)) 16) to:All)
                 }))
             )
             (forEach Value (array (sites State 4)) (set State at:(value) 0))
@@ -196,7 +200,7 @@
         (start { 
             (place "Pawn1" (expand (sites Bottom)))
             (place "Pawn2" (expand (sites Top)))
-            (set Hidden (forEach (sites Board) if:("IsOnLeft" (site))) to:P2)
+             (set Hidden (forEach (sites Board) if:("IsOnLeft" (site))) to:P2)
             (set Hidden (forEach (sites Board) if:("IsOnRight" (site))) to:P1)
             (set Hidden (difference (sites Board) (sites Occupied by:P1)) to:P1)
             (set Hidden (difference (sites Board) (sites Occupied by:P2)) to:P2)
