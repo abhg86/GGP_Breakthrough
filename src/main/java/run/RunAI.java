@@ -2,6 +2,7 @@ package run;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import game.Game;
@@ -28,6 +29,9 @@ public class RunAI
 			Game game;
 			if (args[1].equals("normal")){
 				game = GameLoader.loadGameFromName("Breakthrough.lud");
+			} else if (args[1].equals("small_normal")){
+				List<String> options = Arrays.asList("Board Size/4x4");
+				game = GameLoader.loadGameFromName("Breakthrough.lud", options);
 			} else if (args[1].equals("misere")){
 				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_misere.lud"));
 			} else if (args[1].equals("forced")){
@@ -36,7 +40,10 @@ public class RunAI
 				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_simultaneous.lud"));
 			} else if (args[1].equals("hidden")){
 				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_hidden.lud"));
-			} else {
+			} else if (args[1].equals("small_hidden")){
+				List<String> options = Arrays.asList("Board Size/4x4");
+				game = GameLoader.loadGameFromFile(new File("games/Breakthrough_hidden.lud"), options);
+			}  else {
 				game = GameLoader.loadGameFromName("Breakthrough.lud");
 				System.out.println("Invalid game type, defaulting to normal");
 			}

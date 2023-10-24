@@ -46,6 +46,7 @@ public class HiddenUCT extends AI{
 	public HiddenUCT()
 	{
 		this.friendlyName = "Hidden UCT";
+		Node.nbNodes = 0;
 	}
 	
 	//-------------------------------------------------------------------------
@@ -80,7 +81,6 @@ public class HiddenUCT extends AI{
 
 		// Moves played before the current state of the game
 		List<Move> realMoves = context.trial().generateRealMovesList();
-		System.out.println("Real moves : " + realMoves);
 		List<Context> realContexts = new ArrayList<Context>();
 		
 		// Our main loop through MCTS iterations
@@ -102,18 +102,6 @@ public class HiddenUCT extends AI{
 			// Traverse tree
 			while (true)
 			{
-				if (current.context.trial().over())
-				{
-					// We've reached a terminal state
-					break;
-				}
-				
-				if (! current.possible){
-					// We're in a node that is impossible
-					break;
-				}
-				// System.out.println("nbMoves : " + nbMoves);
-
 				if (nbMoves < realMoves.size()){
 					if (nbMoves < realContexts.size() -1){
 						realContext = realContexts.get(nbMoves);
@@ -134,8 +122,21 @@ public class HiddenUCT extends AI{
 				} else {
 					// We're in a node corresponding to after the current state of the game
 					current = select(current, null, null);
+					
+					if (nbMoves == realMoves.size()) { 
+						followingLayer.add(current);
+					}
+				}
 
-					if (nbMoves == realMoves.size()) { followingLayer.add(current);}
+				if (current.context.trial().over())
+				{
+					// We've reached a terminal state
+					break;
+				}
+				
+				if (! current.possible){
+					// We're in a node that is impossible
+					break;
 				}
 				
 				if (current.visitCount == 0)
@@ -164,7 +165,7 @@ public class HiddenUCT extends AI{
 				);
 			}
 			
-			// This computes utilities for all players at the of the playout,
+			// This computes utilities for all players at the end of the playout,
 			// which will all be values in [-1.0, 1.0]
 			final double[] utilities = RankUtils.utilities(contextEnd);
 			
@@ -188,11 +189,15 @@ public class HiddenUCT extends AI{
 		Move chosenMove = finalMoveSelection(context);
 		// return chosenMove;
 
+		// System.out.println("Number of iterations: " + numIterations);
+		// System.out.println("Number of nodes: " + Node.nbNodes);
+
 		final Context contextFinal = new Context(context);
 		if (game.moves(contextFinal).moves().contains(chosenMove)){
 			return chosenMove;
 		}
 		else {
+			System.out.println("Move not found");
 			return game.moves(contextFinal).moves().get(0);
 		}
 	}
@@ -324,16 +329,17 @@ public class HiddenUCT extends AI{
 				}
 			}
 		}
-		return moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
-		// while (moveVisits.size() > 0){
-			// if (context.game().moves(context).moves().contains(move)){
-			// 	System.out.println("Move found");
-			// 	return move;
-			// } else {
-			// 	moveVisits.remove(move);
-			// }
-		// }
-		// throw new RuntimeException("No move found");
+		while (moveVisits.size() > 0){
+			Move move = moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
+			if (context.game().moves(context).moves().contains(move)){
+				System.out.println("Move found");
+				return move;
+			} else {
+				moveVisits.remove(move);
+			}
+		}
+		System.out.println("No move found");
+		return context.game().moves(context).moves().get(0);
 	}
 
 	private boolean isCoherent(Context context, Context predictedContext){
@@ -421,6 +427,9 @@ public class HiddenUCT extends AI{
 		
 		/** List of moves for which we did not yet create a child node */
 		private final FastArrayList<Move> unexpandedMoves;
+
+		/** Number of nodes in the tree */
+		static int nbNodes = 0;
 		
 		/**
 		 * Constructor
@@ -431,6 +440,7 @@ public class HiddenUCT extends AI{
 		 */
 		public Node(final Node parent, final Move moveFromParent, final Context context)
 		{
+			nbNodes++;
 			this.parent = parent;
 			this.moveFromParent = moveFromParent;
 			if (parent != null){

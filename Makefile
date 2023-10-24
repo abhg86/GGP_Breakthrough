@@ -12,6 +12,9 @@ compile:
 normal :
 	mvn exec:java -Dexec.arguments="$(NUM_RUN),normal"
 
+small_normal :
+	mvn exec:java -Dexec.arguments="$(NUM_RUN),small_normal"
+
 forced :
 	mvn exec:java -Dexec.arguments="$(NUM_RUN),forced"
 
@@ -22,4 +25,7 @@ simultaneous :
 	mvn exec:java -Dexec.arguments="$(NUM_RUN),simultaneous"
 
 hidden :
-	mvn -e exec:java -Dexec.arguments="$(NUM_RUN),hidden"
+	mvn exec:java -Dexec.arguments="$(NUM_RUN),hidden"
+
+small_hidden :
+	mvn exec:java -Dexec.arguments="$(NUM_RUN),small_hidden"
