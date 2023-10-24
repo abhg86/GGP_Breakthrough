@@ -1,6 +1,6 @@
 // #1 = site to check
 (define "IsOnLeft" 
-    (< (- #1 (* (/ (#1) 16) 16)) 8)
+    (< (- #1 (* (/ (#1) <Board:width>) <Board:width>)) <Board:height>)
 )
 
 // #1 = (from) to check
@@ -11,7 +11,7 @@
 
 // #1 = site to check
 (define "IsOnRight" 
-    (>= (- #1 (* (/ (#1) 16) 16)) 8)
+    (>= (- #1 (* (/ (#1) <Board:width>) <Board:width>)) <Board:height>)
 )
 
 // #1 = (from) to check
@@ -23,13 +23,13 @@
 // #1 = (from) played
 // #2 = (to) played
 (define "ReplayOnLeft"
-    (fromTo (from (- #1 8)) (to (- #2 8) (apply (remove (to)))))
+    (fromTo (from (- #1 <Board:height>)) (to (- #2 <Board:height>) (apply (remove (to)))))
 )
 
 // #1 = (from) played
 // #2 = (to) played
 (define "ReplayOnRight"
-    (fromTo (from (+ 8 #1)) (to (+ 8 #2) (apply (remove (to)))))
+    (fromTo (from (+ <Board:height> #1)) (to (+ <Board:height> #2) (apply (remove (to)))))
 )
 
 (define "MarkMove"
@@ -129,8 +129,8 @@
     (pass (then 
         (and {
             (fromTo
-                (from (+ ("FirstSiteToInt" (sites State 4)) 8))
-                (to (+ ("FirstSiteToInt" (sites State 5)) 8)
+                (from (+ ("FirstSiteToInt" (sites State 4)) <Board:height>))
+                (to (+ ("FirstSiteToInt" (sites State 5)) <Board:height>)
                     if:(not ("IsEnemyAt" (to)))
                 )
                 P1
@@ -139,13 +139,13 @@
             (fromTo 
                 (from ("FirstSiteToInt" (sites State 5)))
                 (to ("FirstSiteToInt" (sites State 4))
-                    if:("IsEnemyAt" (+ ("FirstSiteToInt" (sites State 5)) 8))
+                    if:("IsEnemyAt" (+ ("FirstSiteToInt" (sites State 5)) <Board:height>))
                 )
                 P1
                 // It seems that the piece moved the state of the cell with it during the fromTo, so we rectify the coordinates 
                 (then (and {
-                    (add (piece (next)) (to (+ ("FirstSiteToInt" (sites State 5)) 16)))
-                    (set Hidden at:(+ ("FirstSiteToInt" (sites State 5)) 16) to:All)
+                    (add (piece (next)) (to (+ ("FirstSiteToInt" (sites State 5)) <Board:width>)))
+                    (set Hidden at:(+ ("FirstSiteToInt" (sites State 5)) <Board:width>) to:All)
                 }))
             )
             (forEach Value (array (sites State 4)) (set State at:(value) 0))
@@ -158,8 +158,8 @@
     (pass (then
         (and {
             (fromTo
-                (from (- ("FirstSiteToInt" (sites State 4)) 8))
-                (to (- ("FirstSiteToInt" (sites State 5)) 8)
+                (from (- ("FirstSiteToInt" (sites State 4)) <Board:height>))
+                (to (- ("FirstSiteToInt" (sites State 5)) <Board:height>)
                     if:(not ("IsEnemyAt" (to)))
                 )
                 P2
@@ -168,13 +168,13 @@
             (fromTo 
                 (from ("FirstSiteToInt" (sites State 5)))
                 (to ("FirstSiteToInt" (sites State 4))
-                    if:("IsEnemyAt" (- (from) 8))
+                    if:("IsEnemyAt" (- (from) <Board:height>))
                 )
                 P2
                 // It seems that the piece moved the state of the cell with it during the fromTo, so we rectify the coordinates 
                 (then (and {
-                    (add (piece (next)) (to (- ("FirstSiteToInt" (sites State 5)) 16)))
-                    (set Hidden at:(- ("FirstSiteToInt" (sites State 5)) 16) to:All)
+                    (add (piece (next)) (to (- ("FirstSiteToInt" (sites State 5)) <Board:width>)))
+                    (set Hidden at:(- ("FirstSiteToInt" (sites State 5)) <Board:width>) to:All)
                 }))
             )
             (forEach Value (array (sites State 4)) (set State at:(value) 0))
@@ -191,7 +191,7 @@
 (game "Breakthrough_hidden" 
     ("TwoPlayersNorthSouth") 
     (equipment { 
-        (board (square {8 16 8 16}))
+        (board (square {<Board:height> <Board:width> <Board:height> <Board:width>}))
         (piece "Pawn" Each )
         (regions P1 (sites Top))
         (regions P2 (sites Bottom))
@@ -222,7 +222,7 @@
         
         (end {
             ("ReachWin" (sites Mover) Mover)
-            (if (= (counter) 5) (result Mover Draw))
+            (if (= (counter) 6) (result Mover Draw))
         }) 
     )
 )
@@ -235,17 +235,17 @@
     (item "Hexagon" <hex> "The board is tiling by hexagon.") 
 })
 
-(option "Board Size" <Board> args:{ <size> }
+(option "Board Size" <Board> args:{ <height> <width> }
     {
-    (item "4x4" <4> "The game is played on a 4x4 board.") 
-    (item "5x5" <5> "The game is played on a 5x5 board.") 
-    (item "6x6" <6> "The game is played on a 6x6 board.") 
-    (item "7x7" <7> "The game is played on a 7x7 board.") 
-    (item "8x8" <8> "The game is played on a 8x8 board.")* 
-    (item "9x9" <9> "The game is played on a 9x9 board.") 
-    (item "10x10" <10> "The game is played on a 10x10 board.") 
-    (item "11x11" <11> "The game is played on a 11x11 board.") 
-    (item "12x12" <12> "The game is played on a 12x12 board.") 
+    (item "4x4" <4> <8> "The game is played on a 4x4 board.") 
+    (item "5x5" <5> <10> "The game is played on a 5x5 board.")
+    (item "6x6" <6> <12> "The game is played on a 6x6 board.")
+    (item "7x7" <7> <14> "The game is played on a 7x7 board.")
+    (item "8x8" <8> <16> "The game is played on a 8x8 board.")* 
+    (item "9x9" <9> <18> "The game is played on a 9x9 board.")
+    (item "10x10" <10> <20> "The game is played on a 10x10 board.")
+    (item "11x11" <11> <22> "The game is played on a 11x11 board.")
+    (item "12x12" <12> <24> "The game is played on a 12x12 board.")
 })
 
 //------------------------------------------------------------------------------
