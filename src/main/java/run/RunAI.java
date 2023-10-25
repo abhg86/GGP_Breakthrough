@@ -59,6 +59,7 @@ public class RunAI
 			ais.add(null);
 			// ais.add(MCTS.createBiasedMCTS(0.3));
 			ais.add(new HiddenUCT());
+			// ais.add(new ExampleUCT());
 			ais.get(1).initAI(game, 1);
 
 			ais.add(new RandomAI());
