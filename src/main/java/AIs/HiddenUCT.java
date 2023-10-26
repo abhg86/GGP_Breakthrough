@@ -77,7 +77,9 @@ public class HiddenUCT extends AI{
 
 		// Moves played before the current state of the game
 		List<Move> realMoves = context.trial().generateRealMovesList();
+		
 		List<Context> realContexts = new ArrayList<Context>();
+		followingLayer.clear();
 		
 		// Our main loop through MCTS iterations
 		while 
@@ -100,7 +102,7 @@ public class HiddenUCT extends AI{
 			{
 				if (nbMoves < realMoves.size()){
 					if (nbMoves < realContexts.size() -1){
-						realContext = realContexts.get(nbMoves);
+						realContext = realContexts.get(nbMoves + 1);
 					}
 					else {
 						realContext = new Context(realContext);
@@ -194,7 +196,8 @@ public class HiddenUCT extends AI{
 			return chosenMove;
 		}
 		else {
-			return game.moves(contextFinal).moves().get(0);
+			FastArrayList<Move> moves = context.game().moves(context).moves();
+			return moves.get(ThreadLocalRandom.current().nextInt(moves.size()));
 		}
 	}
 	
@@ -211,6 +214,20 @@ public class HiddenUCT extends AI{
 		if (realMove != null){
 			// We're in a node corresponding to a move of the player that has already been played so we expand only toward this move
 			current.unexpandedMoves.clear();
+
+			// If the node has already been explored, no need to create a new node
+			for (Node child: current.children){
+				if (child.moveFromParent.equals(realMove)){
+					if (!isCoherent(child.context, realContext)){
+						for (int i = 1; i < child.scoreSums.length; i++){
+							child.scoreSums[i] = Integer.MIN_VALUE;
+						}
+						child.unexpandedMoves.clear();
+						child.possible = false;
+					}
+					return child;
+				}
+			}
 			final Context context = new Context(current.context);
 			try {
 				context.game().apply(context, realMove);
@@ -222,7 +239,9 @@ public class HiddenUCT extends AI{
 				else {
 					Node impossibleNode = new Node(current, realMove, context);
 					impossibleNode.visitCount = 1;
-					impossibleNode.scoreSums[player] = Integer.MIN_VALUE;
+					for (int i = 1; i < impossibleNode.scoreSums.length; i++){
+						impossibleNode.scoreSums[i] = Integer.MIN_VALUE;
+					}
 					impossibleNode.unexpandedMoves.clear();
 					impossibleNode.possible = false;
 					propagateImpossible(current);
@@ -231,7 +250,9 @@ public class HiddenUCT extends AI{
 			} catch (Exception e) {
 				// The move is not legal here so we are in the wrong world 
 				current.visitCount = 1;
-				current.scoreSums[player] = Integer.MIN_VALUE;
+				for (int i = 1; i < current.scoreSums.length; i++){
+					current.scoreSums[i] = Integer.MIN_VALUE;
+				}				
 				current.possible = false;
 				propagateImpossible(current);
 				return current;
@@ -257,7 +278,9 @@ public class HiddenUCT extends AI{
 				} else {
 					Node impossibleNode = new Node(current, move, context);
 					impossibleNode.visitCount = 1;
-					impossibleNode.scoreSums[player] = Integer.MIN_VALUE;
+					for (int i = 1; i < impossibleNode.scoreSums.length; i++){
+						impossibleNode.scoreSums[i] = Integer.MIN_VALUE;
+					}
 					impossibleNode.unexpandedMoves.clear();
 					impossibleNode.possible = false;
 					propagateImpossible(current);
@@ -327,19 +350,20 @@ public class HiddenUCT extends AI{
 			}
 		}
 
-		// return moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
-		while (moveVisits.size() > 0){
-			Move move = moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
-			if (context.game().moves(context).moves().contains(move)){
-				System.out.println("Move found");
-				System.out.println("average win :" + moveVisits.get(move));
-				return move;
-			} else {
-				moveVisits.remove(move);
-			}
+		if (moveVisits.isEmpty()){
+			FastArrayList<Move> moves = context.game().moves(context).moves();
+			return moves.get(ThreadLocalRandom.current().nextInt(moves.size()));
 		}
-		System.out.println("No move found");
-		return context.game().moves(context).moves().get(0);
+		return moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
+		// while (moveVisits.size() > 0){
+		// 	Move move = moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
+		// 	if (context.game().moves(context).moves().contains(move)){
+		// 		return move;
+		// 	} else {
+		// 		moveVisits.remove(move);
+		// 	}
+		// }
+		// return context.game().moves(context).moves().get(0);
 	}
 
 	private boolean isCoherent(Context context, Context predictedContext){
