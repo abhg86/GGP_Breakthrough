@@ -46,7 +46,6 @@ public class HiddenUCT extends AI{
 	public HiddenUCT()
 	{
 		this.friendlyName = "Hidden UCT";
-		Node.nbNodes = 0;
 	}
 	
 	//-------------------------------------------------------------------------
@@ -419,7 +418,7 @@ public class HiddenUCT extends AI{
 	 * 
 	 * @author Aymeric Behaegel
 	 */
-	private static class Node
+	private class Node
 	{
 		/** Our parent node */
 		private final Node parent;
@@ -448,8 +447,6 @@ public class HiddenUCT extends AI{
 		/** List of moves for which we did not yet create a child node */
 		private final FastArrayList<Move> unexpandedMoves;
 
-		/** Number of nodes in the tree */
-		static int nbNodes = 0;
 		
 		/**
 		 * Constructor
@@ -460,7 +457,6 @@ public class HiddenUCT extends AI{
 		 */
 		public Node(final Node parent, final Move moveFromParent, final Context context)
 		{
-			nbNodes++;
 			this.parent = parent;
 			this.moveFromParent = moveFromParent;
 			if (parent != null){
