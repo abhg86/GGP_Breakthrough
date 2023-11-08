@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := exec
 .PHONY :install exec test compile
 
-NUM_RUN = 10
+NUM_RUN = 100
 
 install:
 	mvn install:install-file -Dfile=resources/Ludii-1.3.11.jar -DgroupId=org.Ludii -DartifactId=Ludii -Dversion=1.3.11 -Dpackaging=jar -DgeneratePom=true
