@@ -7,6 +7,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Stack;
 import java.util.concurrent.ThreadLocalRandom;
 
 import game.Game;
@@ -72,7 +73,7 @@ public class UCD extends AI{
 			Trial trial = new Trial(context.game());
 			Context startingContext = new Context(context.game(), trial);
 			game.start(startingContext);
-			root = new Node(null, null, startingContext);
+			root = new Node(null, startingContext);
 		}
 		
 		// We'll respect any limitations on max seconds and max iterations (don't care about max depth)
@@ -179,7 +180,7 @@ public class UCD extends AI{
 				current.visitCount += 1;
 				for (int p = 1; p <= game.players().count(); ++p)
 				{
-					current.scoreSums[p] += utilities[p];
+					current.scoreMean[p] += utilities[p];
 				}
 				current = current.parent;
 			}
@@ -225,8 +226,8 @@ public class UCD extends AI{
 			for (Node child: current.children){
 				if (child.moveFromParent.equals(realMove)){
 					if (!isCoherent(child.context, realContext)){
-						for (int i = 1; i < child.scoreSums.length; i++){
-							child.scoreSums[i] = Integer.MIN_VALUE;
+						for (int i = 1; i < child.scoreMean.length; i++){
+							child.scoreMean[i] = Integer.MIN_VALUE;
 						}
 						child.unexpandedMoves.clear();
 						child.possible = false;
@@ -245,8 +246,8 @@ public class UCD extends AI{
 				else {
 					Node impossibleNode = new Node(current, realMove, context);
 					impossibleNode.visitCount = 1;
-					for (int i = 1; i < impossibleNode.scoreSums.length; i++){
-						impossibleNode.scoreSums[i] = Integer.MIN_VALUE;
+					for (int i = 1; i < impossibleNode.scoreMean.length; i++){
+						impossibleNode.scoreMean[i] = Integer.MIN_VALUE;
 					}
 					impossibleNode.unexpandedMoves.clear();
 					impossibleNode.possible = false;
@@ -256,8 +257,8 @@ public class UCD extends AI{
 			} catch (Exception e) {
 				// The move is not legal here so we are in the wrong world 
 				current.visitCount = 1;
-				for (int i = 1; i < current.scoreSums.length; i++){
-					current.scoreSums[i] = Integer.MIN_VALUE;
+				for (int i = 1; i < current.scoreMean.length; i++){
+					current.scoreMean[i] = Integer.MIN_VALUE;
 				}				
 				current.possible = false;
 				propagateImpossible(current);
@@ -284,8 +285,8 @@ public class UCD extends AI{
 				} else {
 					Node impossibleNode = new Node(current, move, context);
 					impossibleNode.visitCount = 1;
-					for (int i = 1; i < impossibleNode.scoreSums.length; i++){
-						impossibleNode.scoreSums[i] = Integer.MIN_VALUE;
+					for (int i = 1; i < impossibleNode.scoreMean.length; i++){
+						impossibleNode.scoreMean[i] = Integer.MIN_VALUE;
 					}
 					impossibleNode.unexpandedMoves.clear();
 					impossibleNode.possible = false;
@@ -309,7 +310,7 @@ public class UCD extends AI{
         for (int i = 0; i < numChildren; ++i) 
         {
         	final Node child = current.children.get(i);
-        	final double exploit = child.scoreSums[mover] / child.visitCount;
+        	final double exploit = child.scoreMean[mover] / child.visitCount;
         	final double explore = Math.sqrt(twoParentLog / child.visitCount);
         
             final double ucb1Value = exploit + explore;
@@ -348,10 +349,10 @@ public class UCD extends AI{
 		for (Node node : followingLayer) {
 			if (node.possible){
 				if (moveVisits.containsKey(node.moveFromParent)){
-					moveVisits.put(node.moveFromParent, moveVisits.get(node.moveFromParent) + (node.scoreSums[player] / node.visitCount));
+					moveVisits.put(node.moveFromParent, moveVisits.get(node.moveFromParent) + (node.scoreMean[player] / node.visitCount));
 					// moveVisits.put(node.moveFromParent, Math.max(moveVisits.get(node.moveFromParent), node.visitCount));
 				} else {
-					moveVisits.put(node.moveFromParent, (node.scoreSums[player] / node.visitCount));
+					moveVisits.put(node.moveFromParent, (node.scoreMean[player] / node.visitCount));
 				}
 			}
 		}
@@ -398,6 +399,56 @@ public class UCD extends AI{
 			}
 		}
 	}
+
+	private void backPropagate(Stack<Edge> path, int d1, int d2, int d3, double[] results){
+		Edge leaf = path.pop();
+		ArrayList<Edge> edges = new ArrayList<Edge>();
+		ArrayList<Edge> nextLayer = new ArrayList<Edge>();
+		nextLayer.add(leaf);
+		for (int i=0; i<Math.max(d1, Math.max(d2, d3)); i++){
+			edges = nextLayer;
+			nextLayer.clear();
+			for (Edge edge : edges){
+				// No need to update twice
+				if (edge == path.peek()){
+					path.pop();
+					edge.scoreMean[player] = 
+					edge.nd2 ++;
+					edge.nd3 ++;
+					edge.n ++;
+					nextLayer.addAll(edge.pred.enteringEdges);
+					continue;
+				}
+
+				if (i <= d2){
+					edge.nd2 ++;
+					nextLayer.addAll(edge.pred.enteringEdges);
+				}
+				if (i <= d3){
+					edge.nd3 ++;
+					nextLayer.addAll(edge.pred.enteringEdges);
+				}
+				if (i <= d1){
+					for (int j=0; j<edge.deltaMean.length; j++){
+						if (i==0){
+							// nd3 has already been incremented
+							double value = (edge.scoreMean[j] * (edge.nd3 - 1) + results[player]) / edge.nd3;
+							edge.deltaMean[j] = value - edge.scoreMean[j];
+							edge.scoreMean[j] = value;
+						}
+						else {
+							int n_tot = 0;
+							for (Edge child_edge : edge.succ.exitingEdges){
+								edge.deltaMean[j] += child_edge.deltaMean[j] * child_edge.n;
+								n_tot += child_edge.n;
+							}
+							edge.deltaMean[j] /= n_tot + edge.n_prime;
+						}
+					}
+				}
+			}
+		}
+	}
 	
 	@Override
 	public void initAI(final Game game, final int playerID)
@@ -431,7 +482,7 @@ public class UCD extends AI{
         private final List<Edge> enteringEdges = new ArrayList<Edge>();
 
 		/** Exiting Edges */
-		private final List<Edge> exitinEdges = new ArrayList<Edge>();
+		private final List<Edge> exitingEdges = new ArrayList<Edge>();
 		
 		/** This objects contains the game state for this node (this is why we don't support stochastic games) */
 		private final Context context;
@@ -487,13 +538,22 @@ public class UCD extends AI{
         /** The node that is at the end of this edge */
         private final Node succ;
 
-		/** For every player, sum of utilities / scores backpropagated through this node */
-		private final double[] scoreSums;
+		/** For every player, mean of utilities / scores backpropagated through this node */
+		private double[] scoreMean;
 
-		/** Visit count extended for this edge */
+		/** Variation of scoreMean; used for updating scoreMean */
+		private double[] deltaMean;
+
+		/** Simple visit count */
+		private int n = 0;
+
+		/** Visit count before first child is created */
+		private int n_prime = 0;
+
+        /** Visit count extended for calculating pd2 */
 		private int nd2 = 0;
-
-        /** Visit count extended for the predecessor */
+		
+		/** Visit count extended for this edge */
         private int nd3 = 0;
         
         /**
@@ -507,7 +567,15 @@ public class UCD extends AI{
         {
             this.move = move;
             this.pred = pred;
-            pred.exitinEdges.add(this);
+
+			// Set n_prime for the pred node (i.e. all entering edges) if it is the first time we create a child
+			if (pred.exitingEdges.isEmpty()){
+				for (Edge edge : pred.enteringEdges){
+					edge.n_prime = edge.n;
+				}
+			}
+
+            pred.exitingEdges.add(this);
 
             // Create the successor node if doesn't exist yet and add it to the transposition table
             Game game = pred.context.game();
@@ -523,7 +591,7 @@ public class UCD extends AI{
                 transpoTable.put(contextSucc.state().owned().sites(player), new Pair<Node,ArrayList<Context>>(this.succ, contexts));
             }
 
-            this.scoreSums = new double[game.players().count() + 1];
+            this.scoreMean = new double[game.players().count() + 1];
             this.nd2 = 0;
             this.nd3 = 0;
         }

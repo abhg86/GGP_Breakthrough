@@ -26,6 +26,18 @@ public class RunAI
 		int winrate = 0;
 		for (int i=0; i<Integer.valueOf(args[0]); i++)
 		{
+			// Print memory available
+			Runtime runtime = Runtime.getRuntime();
+			long maxMemory = (runtime.maxMemory() / 1000000);
+			long allocatedMemory = (runtime.totalMemory() / 1000000);
+			long freeMemory = (runtime.freeMemory() / 1000000);
+			long usedMemory = allocatedMemory - freeMemory;
+			long availableMemory = maxMemory - usedMemory;
+			System.out.println("Max memory: " + maxMemory + " MB");
+			System.out.println("Available memory: " + availableMemory + " MB");
+			System.out.println("Allocated memory: " + allocatedMemory + " MB");
+			System.out.println("Free allocated memory: " + freeMemory + " MB");
+
 			Game game;
 			if (args[1].equals("normal")){
 				game = GameLoader.loadGameFromName("Breakthrough.lud");
@@ -118,10 +130,15 @@ public class RunAI
 				// the next time step!
 			}
 			
+			// free memory of the tree
+			((HiddenUCT) ais.get(1)).reset();
+			System.gc();
+
 			// let's see what the result is
 			System.out.println(context.trial().status());
 			if (context.trial().status().winner() == 1)
 				winrate++;
+			System.out.println("Winrate: " + winrate + "/" + (i+1));
 		}
 		System.out.println("Winrate: " + winrate + "/" + args[0]);
 	}

@@ -185,19 +185,17 @@ public class HiddenUCT extends AI{
 		if (context.game().moves(context).moves().size() == 1)
 			return context.game().moves(context).moves().get(0);
 
+		Runtime runtime = Runtime.getRuntime();
+		long maxMemory = (runtime.maxMemory() / 1000000);
+		long allocatedMemory = (runtime.totalMemory() / 1000000);
+		long freeMemory = (runtime.freeMemory() / 1000000);
+		long usedMemory = allocatedMemory - freeMemory;
+		long availableMemory = maxMemory - usedMemory;
+		System.out.println("Available memory: " + availableMemory + " MB");
+
 		// Return the move we wish to play
 		Move chosenMove = finalMoveSelection(context);
-		// return chosenMove;
-
-
-		final Context contextFinal = new Context(context);
-		if (game.moves(contextFinal).moves().contains(chosenMove)){
-			return chosenMove;
-		}
-		else {
-			FastArrayList<Move> moves = context.game().moves(context).moves();
-			return moves.get(ThreadLocalRandom.current().nextInt(moves.size()));
-		}
+		return chosenMove;
 	}
 	
 	/**
@@ -409,6 +407,11 @@ public class HiddenUCT extends AI{
 			return false;
 		
 		return true;
+	}
+
+	/** Change the root to null */
+	public void reset(){
+		root = null;
 	}
 	
 	//-------------------------------------------------------------------------
