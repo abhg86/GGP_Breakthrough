@@ -220,10 +220,21 @@ public class HiddenUCT extends AI{
 							child.scoreSums[i] = Integer.MIN_VALUE;
 						}
 						child.unexpandedMoves.clear();
+						child.children.clear();
 						child.possible = false;
+						// we are supposed to be coherent here, if not we are in the wrong world so the previous node is impossible too
+						// unexpandedMoves already cleared
+						current.children.clear();
+						current.possible = false;
+						propagateImpossible(current);
 					}
+					// We have the right move played so we return the corresponding child and delete the others, useless ones
+					current.children.clear();
+					current.children.add(child);
 					return child;
 				}
+				// It's not the right move played so we remove it
+				current.children.remove(child);
 			}
 			final Context context = new Context(current.context);
 			try {
@@ -251,6 +262,8 @@ public class HiddenUCT extends AI{
 					current.scoreSums[i] = Integer.MIN_VALUE;
 				}				
 				current.possible = false;
+				current.unexpandedMoves.clear();
+				current.children.clear();
 				propagateImpossible(current);
 				return current;
 			}
@@ -376,6 +389,7 @@ public class HiddenUCT extends AI{
 		if (!parent.unexpandedMoves.isEmpty()){
 			return;
 		}
+
 		boolean allChildImpossible = true;
 		for (Node child : parent.children){
 			if (child.possible){
@@ -384,10 +398,13 @@ public class HiddenUCT extends AI{
 		}
 		if (allChildImpossible){
 			parent.possible = false;
+			parent.children.clear();
+			// No unexpanded moves normally
 			if (parent.parent != null) {
 				propagateImpossible(parent.parent);
 			}
 		}
+		return;
 	}
 	
 	@Override

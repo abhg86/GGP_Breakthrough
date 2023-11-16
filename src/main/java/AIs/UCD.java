@@ -219,28 +219,41 @@ public class UCD extends AI{
 			current.unexpandedMoves.clear();
 
 			// If the node has already been explored, no need to create a new node
-			for (Node child: current.children){
-				if (child.moveFromParent.equals(realMove)){
-					if (!isCoherent(child.context, realContext)){
+			for (Edge child: current.exitingEdges){
+				if (child.move.equals(realMove)){
+					if (!isCoherent(child.succ.context, realContext)){
 						for (int i = 1; i < child.scoreMean.length; i++){
 							child.scoreMean[i] = Integer.MIN_VALUE;
 						}
-						child.unexpandedMoves.clear();
-						child.possible = false;
+						child.succ.unexpandedMoves.clear();
+						child.succ.exitingEdges.clear();
+						child.succ.possible = false;
+						// we are supposed to be coherent here, if not we are in the wrong world so the previous node is impossible too
+						// unexpandedMoves already cleared
+						current.exitingEdges.clear();
+						current.possible = false;
+						propagateImpossible(current);
 					}
-					return child;
+					// We have the right move played so we return the corresponding child and delete the others, useless ones
+					current.exitingEdges.clear();
+					current.exitingEdges.add(child);
+					return child.succ;
 				}
+				// It's not the right move played so we remove it
+				current.exitingEdges.remove(child);
 			}
 			final Context context = new Context(current.context);
 			try {
 				context.game().apply(context, realMove);
 				if (isCoherent(realContext, context)){
-					Node newNode = new Node(current, realMove, context);
+					Edge newEdge = new Edge(realMove, current);
+					Node newNode = newEdge.succ;
 					newNode.visitCount = 1;
 					return newNode;
 				}
 				else {
-					Node impossibleNode = new Node(current, realMove, context);
+					Edge newEdge = new Edge(realMove, current);
+					Node impossibleNode = newEdge.succ;
 					impossibleNode.visitCount = 1;
 					for (int i = 1; i < impossibleNode.scoreMean.length; i++){
 						impossibleNode.scoreMean[i] = Integer.MIN_VALUE;
@@ -257,6 +270,8 @@ public class UCD extends AI{
 					current.scoreMean[i] = Integer.MIN_VALUE;
 				}				
 				current.possible = false;
+				current.unexpandedMoves.clear();
+				current.exitingEdges.clear();
 				propagateImpossible(current);
 				return current;
 			}
@@ -378,6 +393,7 @@ public class UCD extends AI{
 		if (!parent.unexpandedMoves.isEmpty()){
 			return;
 		}
+
 		boolean allChildImpossible = true;
 		for (Edge childEdge : parent.exitingEdges){
 			if (childEdge.succ.possible){
@@ -386,10 +402,13 @@ public class UCD extends AI{
 		}
 		if (allChildImpossible){
 			parent.possible = false;
+			parent.exitingEdges.clear();
+			// No unexpanded moves normally
 			if (parent.enteringEdges != null) {
 				parent.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
 			}
 		}
+		return;
 	}
 
 	private void backPropagate(Stack<Edge> path, int d1, int d2, int d3, double[] results){
@@ -527,6 +546,7 @@ public class UCD extends AI{
 			this.enteringEdges.add(edge);
 			if (edge != null){
 				depth = edge.pred.depth + 1;
+				edge.succ = this;
 			}
 			this.context = context;
 			
