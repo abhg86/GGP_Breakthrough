@@ -125,14 +125,14 @@ public class HiddenUCT extends AI{
 					}
 				}
 
+				if (current == null) {
+					// We're in a node that is impossible
+					break;
+				}
+
 				if (current.context.trial().over())
 				{
 					// We've reached a terminal state
-					break;
-				}
-				
-				if (! current.possible){
-					// We're in a node that is impossible
 					break;
 				}
 				
@@ -144,38 +144,41 @@ public class HiddenUCT extends AI{
 				nbMoves++;
 			}
 			
-			Context contextEnd = current.context;
-			
-			if (!contextEnd.trial().over() && current.possible)
-			{
-				// Run a playout if we don't already have a terminal game state in node
-				contextEnd = new Context(contextEnd);
-				game.playout
-				(
-					contextEnd, 
-					null, 
-					-1.0, 
-					null, 
-					0, 
-					-1, 
-					ThreadLocalRandom.current()
-				);
-			}
-			
-			// This computes utilities for all players at the end of the playout,
-			// which will all be values in [-1.0, 1.0]
-			final double[] utilities = RankUtils.utilities(contextEnd);
-			
-			// Backpropagate utilities through the tree
-			while (current != null)
-			{
-				current.visitCount += 1;
-				for (int p = 1; p <= game.players().count(); ++p)
+			if (current != null) {
+				Context contextEnd = current.context;
+				
+				if (!contextEnd.trial().over())
 				{
-					current.scoreSums[p] += utilities[p];
+					// Run a playout if we don't already have a terminal game state in node
+					contextEnd = new Context(contextEnd);
+					game.playout
+					(
+						contextEnd, 
+						null, 
+						-1.0, 
+						null, 
+						0, 
+						-1, 
+						ThreadLocalRandom.current()
+					);
 				}
-				current = current.parent;
+				
+				// This computes utilities for all players at the end of the playout,
+				// which will all be values in [-1.0, 1.0]
+				final double[] utilities = RankUtils.utilities(contextEnd);
+				
+				// Backpropagate utilities through the tree
+				while (current != null)
+				{
+					current.visitCount += 1;
+					for (int p = 1; p <= game.players().count(); ++p)
+					{
+						current.scoreSums[p] += utilities[p];
+					}
+					current = current.parent;
+				}
 			}
+			
 			
 			// Increment iteration count
 			++numIterations;
@@ -212,60 +215,52 @@ public class HiddenUCT extends AI{
 			// We're in a node corresponding to a move of the player that has already been played so we expand only toward this move
 			current.unexpandedMoves.clear();
 
+			Boolean currentImpossible = false;
+			Node found = null;
+
 			// If the node has already been explored, no need to create a new node
-			for (Node child: current.children){
+			for (java.util.Iterator<Node> iterator = current.children.iterator();  iterator.hasNext(); ) {
+				// Iterator and breaks because of concurrentModificationException
+				Node child =  iterator.next();
 				if (child.moveFromParent.equals(realMove)){
 					if (!isCoherent(child.context, realContext)){
-						for (int i = 1; i < child.scoreSums.length; i++){
-							child.scoreSums[i] = Integer.MIN_VALUE;
-						}
-						child.unexpandedMoves.clear();
-						child.children.clear();
-						child.possible = false;
-						// we are supposed to be coherent here, if not we are in the wrong world so the previous node is impossible too
-						// unexpandedMoves already cleared
-						current.children.clear();
-						current.possible = false;
-						propagateImpossible(current);
+						currentImpossible = true;
+						break;
 					}
-					// We have the right move played so we return the corresponding child and delete the others, useless ones
-					current.children.clear();
-					current.children.add(child);
-					return child;
+					else {
+						found = child;
+						break;
+					}
 				}
 				// It's not the right move played so we remove it
-				current.children.remove(child);
+				iterator.remove();
 			}
-			final Context context = new Context(current.context);
-			try {
-				context.game().apply(context, realMove);
-				if (isCoherent(realContext, context)){
-					Node newNode = new Node(current, realMove, context);
-					newNode.visitCount = 1;
-					return newNode;
-				}
-				else {
-					Node impossibleNode = new Node(current, realMove, context);
-					impossibleNode.visitCount = 1;
-					for (int i = 1; i < impossibleNode.scoreSums.length; i++){
-						impossibleNode.scoreSums[i] = Integer.MIN_VALUE;
-					}
-					impossibleNode.unexpandedMoves.clear();
-					impossibleNode.possible = false;
-					propagateImpossible(current);
-					return impossibleNode;
-				}
-			} catch (Exception e) {
-				// The move is not legal here so we are in the wrong world 
-				current.visitCount = 1;
-				for (int i = 1; i < current.scoreSums.length; i++){
-					current.scoreSums[i] = Integer.MIN_VALUE;
-				}				
-				current.possible = false;
-				current.unexpandedMoves.clear();
+
+			if (currentImpossible) {
+				// unexpandedMoves already cleared
 				current.children.clear();
 				propagateImpossible(current);
-				return current;
+				return null;
+			}
+
+			if (found != null) {
+				// We have the right move played so we return the corresponding child and delete the others, useless ones
+				current.children.clear();
+				current.children.add(found);
+				return found;
+			}
+
+			final Context context = new Context(current.context);
+			context.game().apply(context, realMove);
+			if (isCoherent(realContext, context)){
+				Node newNode = new Node(current, realMove, context);
+				newNode.visitCount = 1;
+				return newNode;
+			}
+			else {
+				current.children.clear();
+				propagateImpossible(current);
+				return null;
 			}
 		}
 		
@@ -280,25 +275,14 @@ public class HiddenUCT extends AI{
 			
 			// apply the move
 			context.game().apply(context, move);
-			if (realContext != null){
-				if ( isCoherent(context, realContext)){
-					Node newNode = new Node(current, move, context);
-					newNode.visitCount = 1;
-					return newNode;
-				} else {
-					Node impossibleNode = new Node(current, move, context);
-					impossibleNode.visitCount = 1;
-					for (int i = 1; i < impossibleNode.scoreSums.length; i++){
-						impossibleNode.scoreSums[i] = Integer.MIN_VALUE;
-					}
-					impossibleNode.unexpandedMoves.clear();
-					impossibleNode.possible = false;
+			if (realContext != null && ! (isCoherent(context, realContext))){
 					propagateImpossible(current);
-					return impossibleNode;
-				}
+					return null;
 			}
 			// create new node and return it
-			return new Node(current, move, context);
+			Node newNode = new Node(current, move, context);
+			newNode.visitCount = 1;
+			return newNode;
 		}
 		
 		// use UCB1 equation to select from all children, with random tie-breaking
@@ -350,13 +334,11 @@ public class HiddenUCT extends AI{
 	{
 		Map<Move, Double> moveVisits = new HashMap<>();
 		for (Node node : followingLayer) {
-			if (node.possible){
-				if (moveVisits.containsKey(node.moveFromParent)){
-					moveVisits.put(node.moveFromParent, moveVisits.get(node.moveFromParent) + (node.scoreSums[player] / node.visitCount));
-					// moveVisits.put(node.moveFromParent, Math.max(moveVisits.get(node.moveFromParent), node.visitCount));
-				} else {
-					moveVisits.put(node.moveFromParent, (node.scoreSums[player] / node.visitCount));
-				}
+			if (moveVisits.containsKey(node.moveFromParent)){
+				moveVisits.put(node.moveFromParent, moveVisits.get(node.moveFromParent) + (node.scoreSums[player] / node.visitCount));
+				// moveVisits.put(node.moveFromParent, Math.max(moveVisits.get(node.moveFromParent), node.visitCount));
+			} else {
+				moveVisits.put(node.moveFromParent, (node.scoreSums[player] / node.visitCount));
 			}
 		}
 
@@ -365,15 +347,6 @@ public class HiddenUCT extends AI{
 			return moves.get(ThreadLocalRandom.current().nextInt(moves.size()));
 		}
 		return moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
-		// while (moveVisits.size() > 0){
-		// 	Move move = moveVisits.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
-		// 	if (context.game().moves(context).moves().contains(move)){
-		// 		return move;
-		// 	} else {
-		// 		moveVisits.remove(move);
-		// 	}
-		// }
-		// return context.game().moves(context).moves().get(0);
 	}
 
 	private boolean isCoherent(Context context, Context predictedContext){
@@ -390,17 +363,11 @@ public class HiddenUCT extends AI{
 			return;
 		}
 
-		boolean allChildImpossible = true;
-		for (Node child : parent.children){
-			if (child.possible){
-				allChildImpossible = false;
-			}
-		}
-		if (allChildImpossible){
-			parent.possible = false;
+		if (parent.children.isEmpty()){
 			parent.children.clear();
 			// No unexpanded moves normally
 			if (parent.parent != null) {
+				parent.parent.children.remove(parent);
 				propagateImpossible(parent.parent);
 			}
 		}
@@ -454,18 +421,15 @@ public class HiddenUCT extends AI{
 
 		/** Depth of the node in the tree */
 		private int depth = 0;
-
-		/** If the node is possible or not */
-		private boolean possible = true;
 		
 		/** For every player, sum of utilities / scores backpropagated through this node */
-		private final double[] scoreSums;
+		private double[] scoreSums;
 		
 		/** Child nodes */
-		private final List<Node> children = new ArrayList<Node>();
+		private List<Node> children = new ArrayList<Node>();
 		
 		/** List of moves for which we did not yet create a child node */
-		private final FastArrayList<Move> unexpandedMoves;
+		private FastArrayList<Move> unexpandedMoves;
 
 		
 		/**

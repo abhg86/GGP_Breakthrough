@@ -137,14 +137,14 @@ public class UCD extends AI{
 					}
 				}
 
+				if (current == null) {
+					// We're in a node that is impossible
+					break;
+				}
+
 				if (current.context.trial().over())
 				{
 					// We've reached a terminal state
-					break;
-				}
-				
-				if (! current.possible){
-					// We're in a node that is impossible
 					break;
 				}
 				
@@ -156,30 +156,32 @@ public class UCD extends AI{
 				nbMoves++;
 			}
 			
-			Context contextEnd = current.context;
-			
-			if (!contextEnd.trial().over() && current.possible)
-			{
-				// Run a playout if we don't already have a terminal game state in node
-				contextEnd = new Context(contextEnd);
-				game.playout
-				(
-					contextEnd, 
-					null, 
-					-1.0, 
-					null, 
-					0, 
-					-1, 
-					ThreadLocalRandom.current()
-				);
+			if (current != null){
+				Context contextEnd = current.context;
+				
+				if (!contextEnd.trial().over())
+				{
+					// Run a playout if we don't already have a terminal game state in node
+					contextEnd = new Context(contextEnd);
+					game.playout
+					(
+						contextEnd, 
+						null, 
+						-1.0, 
+						null, 
+						0, 
+						-1, 
+						ThreadLocalRandom.current()
+					);
+				}
+				
+				// This computes utilities for all players at the end of the playout,
+				// which will all be values in [-1.0, 1.0]
+				final double[] utilities = RankUtils.utilities(contextEnd);
+				
+				// Backpropagate utilities through the tree
+				backPropagate(path, d1, d2, d3, utilities);
 			}
-			
-			// This computes utilities for all players at the end of the playout,
-			// which will all be values in [-1.0, 1.0]
-			final double[] utilities = RankUtils.utilities(contextEnd);
-			
-			// Backpropagate utilities through the tree
-			backPropagate(path, d1, d2, d3, utilities);
 			
 			// Increment iteration count
 			++numIterations;
@@ -218,62 +220,52 @@ public class UCD extends AI{
 			// We're in a node corresponding to a move of the player that has already been played so we expand only toward this move
 			current.unexpandedMoves.clear();
 
+			Boolean currentImpossible = false;
+			Edge found = null;
+
 			// If the node has already been explored, no need to create a new node
-			for (Edge child: current.exitingEdges){
+			for (java.util.Iterator<Edge> iterator = current.exitingEdges.iterator();  iterator.hasNext();  ){
+				// Iterator and breaks because of concurrentModificationException
+				Edge child = iterator.next();
 				if (child.move.equals(realMove)){
 					if (!isCoherent(child.succ.context, realContext)){
-						for (int i = 1; i < child.scoreMean.length; i++){
-							child.scoreMean[i] = Integer.MIN_VALUE;
-						}
-						child.succ.unexpandedMoves.clear();
-						child.succ.exitingEdges.clear();
-						child.succ.possible = false;
-						// we are supposed to be coherent here, if not we are in the wrong world so the previous node is impossible too
-						// unexpandedMoves already cleared
-						current.exitingEdges.clear();
-						current.possible = false;
-						propagateImpossible(current);
+						currentImpossible = true;
+						break;
+					} else {
+						found = child;
+						break;
 					}
-					// We have the right move played so we return the corresponding child and delete the others, useless ones
-					current.exitingEdges.clear();
-					current.exitingEdges.add(child);
-					return child.succ;
 				}
 				// It's not the right move played so we remove it
-				current.exitingEdges.remove(child);
+				iterator.remove();
 			}
-			final Context context = new Context(current.context);
-			try {
-				context.game().apply(context, realMove);
-				if (isCoherent(realContext, context)){
-					Edge newEdge = new Edge(realMove, current);
-					Node newNode = newEdge.succ;
-					newNode.visitCount = 1;
-					return newNode;
-				}
-				else {
-					Edge newEdge = new Edge(realMove, current);
-					Node impossibleNode = newEdge.succ;
-					impossibleNode.visitCount = 1;
-					for (int i = 1; i < impossibleNode.scoreMean.length; i++){
-						impossibleNode.scoreMean[i] = Integer.MIN_VALUE;
-					}
-					impossibleNode.unexpandedMoves.clear();
-					impossibleNode.possible = false;
-					propagateImpossible(current);
-					return impossibleNode;
-				}
-			} catch (Exception e) {
-				// The move is not legal here so we are in the wrong world 
-				current.visitCount = 1;
-				for (int i = 1; i < current.scoreMean.length; i++){
-					current.scoreMean[i] = Integer.MIN_VALUE;
-				}				
-				current.possible = false;
-				current.unexpandedMoves.clear();
+
+			if (currentImpossible) {
+				// unexpandedMoves already cleared
 				current.exitingEdges.clear();
 				propagateImpossible(current);
-				return current;
+				return null;
+			}
+
+			if (found != null) {
+				// We have the right move played so we return the corresponding child and delete the others, useless ones
+				current.exitingEdges.clear();
+				current.exitingEdges.add(found);
+				return found.succ;
+			}
+
+			final Context context = new Context(current.context);
+			context.game().apply(context, realMove);
+			if (isCoherent(realContext, context)){
+				Edge newEdge = new Edge(realMove, current);
+				Node newNode = newEdge.succ;
+				newNode.visitCount = 1;
+				return newNode;
+			}
+			else {
+				current.exitingEdges.clear();
+				propagateImpossible(current);
+				return null;
 			}
 		}
 		
@@ -288,41 +280,35 @@ public class UCD extends AI{
 			
 			// apply the move
 			context.game().apply(context, move);
-			if (realContext != null){
-				if ( isCoherent(context, realContext)){
-					Node newNode = new Node(current, move, context);
-					newNode.visitCount = 1;
-					return newNode;
-				} else {
-					Node impossibleNode = new Node(current, move, context);
-					impossibleNode.visitCount = 1;
-					for (int i = 1; i < impossibleNode.scoreMean.length; i++){
-						impossibleNode.scoreMean[i] = Integer.MIN_VALUE;
-					}
-					impossibleNode.unexpandedMoves.clear();
-					impossibleNode.possible = false;
-					propagateImpossible(current);
-					return impossibleNode;
-				}
+			if (realContext != null && ! (isCoherent(context, realContext))){
+				propagateImpossible(current);
+				return null;
 			}
 			// create new node and return it
-			return new Node(current, move, context);
+			Edge newEdge = new Edge(move, current);
+			Node newNode = newEdge.succ;
+			newNode.visitCount = 1;
+			return newNode;
 		}
 		
 		// use UCB1 equation to select from all children, with random tie-breaking
-		Node bestChild = null;
+		Edge bestChild = null;
         double bestValue = Double.NEGATIVE_INFINITY;
-        final double twoParentLog = 2.0 * Math.log(Math.max(1, current.visitCount));
+		double pd2 = 0.0;
+		for (Edge child : current.exitingEdges){
+			pd2 += child.nd2;
+		}
+        final double twoParentLog = 2.0 * Math.log(Math.max(1, pd2));
         int numBestFound = 0;
         
-        final int numChildren = current.children.size();
+        final int numChildren = current.exitingEdges.size();
         final int mover = current.context.state().mover();
 
         for (int i = 0; i < numChildren; ++i) 
         {
-        	final Node child = current.children.get(i);
-        	final double exploit = child.scoreMean[mover] / child.visitCount;
-        	final double explore = Math.sqrt(twoParentLog / child.visitCount);
+        	final Edge child = current.exitingEdges.get(i);
+        	final double exploit = child.scoreMean[mover];
+        	final double explore = Math.sqrt(twoParentLog / child.nd3);
         
             final double ucb1Value = exploit + explore;
             
@@ -343,7 +329,7 @@ public class UCD extends AI{
             }
         }
         
-        return bestChild;
+        return bestChild.succ;
 	}
 	
 	/**
@@ -359,14 +345,12 @@ public class UCD extends AI{
 		int maxn = 0;
 		Move bestMove = null;
 		for (Edge edge : transpoTable.get(context.state().owned().sites(player)).key().exitingEdges){
-			if (edge.succ.possible){
-				if (edge.succ.visitCount > maxn){
-					maxn = edge.succ.visitCount;
+			if (edge.succ.visitCount > maxn){
+				maxn = edge.succ.visitCount;
+				bestMove = edge.move;
+			} else  if (edge.succ.visitCount == maxn){
+				if (ThreadLocalRandom.current().nextInt() % 2 == 0){
 					bestMove = edge.move;
-				} else  if (edge.succ.visitCount == maxn){
-					if (ThreadLocalRandom.current().nextInt() % 2 == 0){
-						bestMove = edge.move;
-					}
 				}
 			}
 		}
@@ -377,7 +361,6 @@ public class UCD extends AI{
 		}
 
 		return bestMove;
-
 	}
 
 	private boolean isCoherent(Context context, Context predictedContext){
@@ -394,17 +377,11 @@ public class UCD extends AI{
 			return;
 		}
 
-		boolean allChildImpossible = true;
-		for (Edge childEdge : parent.exitingEdges){
-			if (childEdge.succ.possible){
-				allChildImpossible = false;
-			}
-		}
-		if (allChildImpossible){
-			parent.possible = false;
+		if (parent.exitingEdges.isEmpty()){
 			parent.exitingEdges.clear();
 			// No unexpanded moves normally
 			if (parent.enteringEdges != null) {
+				parent.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
 				parent.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
 			}
 		}
@@ -526,9 +503,6 @@ public class UCD extends AI{
 
 		/** Depth of the node in the tree */
 		private int depth = 0;
-
-		/** If the node is possible or not */
-		private boolean possible = true;
 		
 		/** List of moves for which we did not yet create a child node */
 		private final FastArrayList<Move> unexpandedMoves;
@@ -546,7 +520,6 @@ public class UCD extends AI{
 			this.enteringEdges.add(edge);
 			if (edge != null){
 				depth = edge.pred.depth + 1;
-				edge.succ = this;
 			}
 			this.context = context;
 			
@@ -600,11 +573,13 @@ public class UCD extends AI{
          */
         public Edge(final Move move, final Node pred)
         {
+			System.out.println("New edge");
             this.move = move;
             this.pred = pred;
 
 			// Set n_prime for the pred node (i.e. all entering edges) if it is the first time we create a child
-			if (pred.exitingEdges.isEmpty()){
+			if (pred.exitingEdges.isEmpty() && !(pred.enteringEdges.size()==1 && pred.enteringEdges.get(0) == null)){
+				System.out.println("In");
 				for (Edge edge : pred.enteringEdges){
 					edge.n_prime = edge.n;
 				}
@@ -629,6 +604,7 @@ public class UCD extends AI{
             this.scoreMean = new double[game.players().count() + 1];
             this.nd2 = 0;
             this.nd3 = 0;
+			System.out.println("End new edge");
         }
         
     }
