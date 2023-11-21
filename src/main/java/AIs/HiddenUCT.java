@@ -254,6 +254,7 @@ public class HiddenUCT extends AI{
 			context.game().apply(context, realMove);
 			if (isCoherent(realContext, context)){
 				Node newNode = new Node(current, realMove, context);
+				// We don't want to stop here so we add 1 to the visitCount
 				newNode.visitCount = 1;
 				return newNode;
 			}
@@ -281,7 +282,6 @@ public class HiddenUCT extends AI{
 			}
 			// create new node and return it
 			Node newNode = new Node(current, move, context);
-			newNode.visitCount = 1;
 			return newNode;
 		}
 		

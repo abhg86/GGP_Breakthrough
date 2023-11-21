@@ -3,15 +3,12 @@ package AIs;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ThreadLocalRandom;
 
 import game.Game;
-import game.functions.intArray.array.Array;
 import gnu.trove.list.array.TIntArrayList;
 import main.collections.FastArrayList;
 import main.collections.Pair;
@@ -77,6 +74,9 @@ public class UCD extends AI{
 			Context startingContext = new Context(context.game(), trial);
 			game.start(startingContext);
 			root = new Node(null, startingContext);
+			ArrayList<Context> contexts = new ArrayList<Context>();
+			contexts.add(startingContext);
+			transpoTable.put(startingContext.state().owned().sites(player), new Pair<Node,ArrayList<Context>>(root, contexts));
 		}
 		
 		// We'll respect any limitations on max seconds and max iterations (don't care about max depth)
@@ -123,14 +123,14 @@ public class UCD extends AI{
 
 					if (current.context.state().mover() == player ){
 						// We're in a node corresponding to a move of the player that has already been played
-						current = select(current, realMoves.get(nbMoves), realContext);
+						current = select(current, realMoves.get(nbMoves), realContext, path);
 					} else {
 						// We're in a node corresponding to a move of the opponent but before the current state of the game
-						current = select(current, null, realContext);
+						current = select(current, null, realContext, path);
 					}
 				} else {
 					// We're in a node corresponding to after the current state of the game
-					current = select(current, null, null);
+					current = select(current, null, null, path);
 					
 					if (nbMoves == realMoves.size()) { 
 						followingLayer.add(current);
@@ -214,7 +214,7 @@ public class UCD extends AI{
 	 * @param current
 	 * @return Selected node (if it has 0 visits, it will be a newly-expanded node).
 	 */
-	public Node select(final Node current, final Move realMove, Context realContext)
+	public Node select(final Node current, final Move realMove, Context realContext, Stack<Edge> path)
 	{
 		if (realMove != null){
 			// We're in a node corresponding to a move of the player that has already been played so we expand only toward this move
@@ -251,6 +251,7 @@ public class UCD extends AI{
 				// We have the right move played so we return the corresponding child and delete the others, useless ones
 				current.exitingEdges.clear();
 				current.exitingEdges.add(found);
+				path.push(found);
 				return found.succ;
 			}
 
@@ -259,7 +260,12 @@ public class UCD extends AI{
 			if (isCoherent(realContext, context)){
 				Edge newEdge = new Edge(realMove, current);
 				Node newNode = newEdge.succ;
+				// We don't want to stop here so we add 1 to the visitCount
 				newNode.visitCount = 1;
+				newEdge.nd2 ++;
+				newEdge.nd3 ++;
+				newEdge.n ++;
+				path.push(newEdge);
 				return newNode;
 			}
 			else {
@@ -287,10 +293,10 @@ public class UCD extends AI{
 			// create new node and return it
 			Edge newEdge = new Edge(move, current);
 			Node newNode = newEdge.succ;
-			newNode.visitCount = 1;
+			path.push(newEdge);
 			return newNode;
 		}
-		
+
 		// use UCB1 equation to select from all children, with random tie-breaking
 		Edge bestChild = null;
         double bestValue = Double.NEGATIVE_INFINITY;
@@ -329,6 +335,7 @@ public class UCD extends AI{
             }
         }
         
+		path.push(bestChild);
         return bestChild.succ;
 	}
 	
@@ -380,7 +387,7 @@ public class UCD extends AI{
 		if (parent.exitingEdges.isEmpty()){
 			parent.exitingEdges.clear();
 			// No unexpanded moves normally
-			if (parent.enteringEdges != null) {
+			if (!(parent.enteringEdges.size()==1 && parent.enteringEdges.get(0) == null)) {
 				parent.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
 				parent.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
 			}
@@ -390,12 +397,11 @@ public class UCD extends AI{
 
 	private void backPropagate(Stack<Edge> path, int d1, int d2, int d3, double[] results){
 		Edge leaf = path.pop();
-		ArrayList<Edge> edges = new ArrayList<Edge>();
-		ArrayList<Edge> nextLayer = new ArrayList<Edge>();
+		Set<Edge> nextLayer = new HashSet<Edge>();
 		nextLayer.add(leaf);
 		int max = Math.max(d1, Math.max(d2, d3));
-		for (int i=0; i<=max; i++){
-			edges = nextLayer;
+		for (int i=0; i<=max && !path.empty(); i++){
+			Set<Edge> edges = new HashSet<>(nextLayer);
 			nextLayer.clear();
 			for (Edge edge : edges){
 				// No need to update twice
@@ -405,17 +411,23 @@ public class UCD extends AI{
 					edge.nd3 ++;
 					updateMean(edge, i, results);
 					edge.n ++;
-					nextLayer.addAll(edge.pred.enteringEdges);
+					if (!(edge.pred.enteringEdges.size()==1 && edge.pred.enteringEdges.get(0) == null)) {
+						nextLayer.addAll(edge.pred.enteringEdges);
+					}
 					continue;
 				}
 
 				if (i <= d2){
 					edge.nd2 ++;
-					nextLayer.addAll(edge.pred.enteringEdges);
+					if (!(edge.pred.enteringEdges.size()==1 && edge.pred.enteringEdges.get(0) == null)) {
+						nextLayer.addAll(edge.pred.enteringEdges);
+					}
 				}
 				if (i <= d3){
 					edge.nd3 ++;
-					nextLayer.addAll(edge.pred.enteringEdges);
+					if (!(edge.pred.enteringEdges.size()==1 && edge.pred.enteringEdges.get(0) == null)) {
+						nextLayer.addAll(edge.pred.enteringEdges);
+					}
 				}
 				if (i <= d1){
 					updateMean(edge, i, results);
@@ -459,6 +471,7 @@ public class UCD extends AI{
 				edge.deltaMean[j] /= n_tot + edge.n_prime;
 			}
 		}
+		return ;
 	}
 
 	@Override
@@ -573,13 +586,11 @@ public class UCD extends AI{
          */
         public Edge(final Move move, final Node pred)
         {
-			System.out.println("New edge");
             this.move = move;
             this.pred = pred;
 
 			// Set n_prime for the pred node (i.e. all entering edges) if it is the first time we create a child
 			if (pred.exitingEdges.isEmpty() && !(pred.enteringEdges.size()==1 && pred.enteringEdges.get(0) == null)){
-				System.out.println("In");
 				for (Edge edge : pred.enteringEdges){
 					edge.n_prime = edge.n;
 				}
@@ -602,9 +613,9 @@ public class UCD extends AI{
             }
 
             this.scoreMean = new double[game.players().count() + 1];
+			this.deltaMean = new double[game.players().count() + 1];
             this.nd2 = 0;
             this.nd3 = 0;
-			System.out.println("End new edge");
         }
         
     }
