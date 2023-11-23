@@ -40,6 +40,9 @@ public class UCD extends AI{
 	/** The root node of the tree */
 	protected Node root = null;
 
+	/** The maximum depth of the tree */
+	protected int maxDepth = 0;
+
     /** The transposition table of existing nodes regrouped by similar observations from a player */
 	protected HashMap<TIntArrayList,Pair<Node,ArrayList<Context>>> transpoTable = new HashMap<TIntArrayList,Pair<Node,ArrayList<Context>>>();
 
@@ -189,12 +192,25 @@ public class UCD extends AI{
 			++numIterations;
 		}
 
+		// System.out.println("number of iterations: " + numIterations);
 		// Return the only available action if there is only one (for example for a pass)
 		if (context.game().moves(context).moves().size() == 1)
 			return context.game().moves(context).moves().get(0);
 
 		// Return the move we wish to play
-		Move chosenMove = finalMoveSelection(context);
+		Move chosenMove = null;
+		try {
+			chosenMove = finalMoveSelection(context);
+		} catch (Exception e){
+			System.out.println("Exception");
+			// transpoTable.forEach((key, value) -> System.out.println(key + " " + value.key().visitCount));
+			TIntArrayList id = context.state().owned().sites(player);
+			id.add(context.trial().moveNumber());
+			System.out.println(id);
+			System.out.println("maxDepth: " + maxDepth);
+			System.exit(0);
+		}
+		// Move chosenMove = finalMoveSelection(context);
 		return chosenMove;
 	}
 	
@@ -292,6 +308,17 @@ public class UCD extends AI{
 		Edge bestChild = null;
         double bestValue = Double.NEGATIVE_INFINITY;
 		double pd2 = 0.0;
+
+		// check if the node is impossible (happens, despite the cleaning with propagateImpossible, for some reason)
+		if (current.exitingEdges.isEmpty()){
+			// No unexpanded moves normally
+			if (!(current.enteringEdges.size()==1 && current.enteringEdges.get(0) == null)) {
+				current.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
+				current.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
+			}
+			return null;
+		}
+
 		for (Edge child : current.exitingEdges){
 			pd2 += child.nd2;
 		}
@@ -389,7 +416,7 @@ public class UCD extends AI{
 	}
 
 	private void backPropagate(Stack<Edge> path, int d1, int d2, int d3, double[] results){
-		Edge leaf = path.pop();
+		Edge leaf = path.peek();
 		Set<Edge> nextLayer = new HashSet<Edge>();
 		nextLayer.add(leaf);
 		int max = Math.max(d1, Math.max(d2, d3));
@@ -408,6 +435,7 @@ public class UCD extends AI{
 					edge.nd3 ++;
 					updateMean(edge, i, results);
 					edge.n ++;
+					edge.succ.visitCount ++;
 					continue;
 				}
 
@@ -521,6 +549,9 @@ public class UCD extends AI{
 			this.enteringEdges.add(edge);
 			if (edge != null){
 				depth = edge.pred.depth + 1;
+				if (depth > maxDepth){
+					maxDepth = depth;
+				}
 			}
 			this.context = context;
 			

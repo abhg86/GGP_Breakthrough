@@ -196,8 +196,6 @@ public class HiddenUCT extends AI{
 		long availableMemory = maxMemory - usedMemory;
 		System.out.println("Available memory: " + availableMemory + " MB");
 
-		System.out.println("Play");
-		System.out.println("Number of iterations: " + numIterations);
 		// Return the move we wish to play
 		Move chosenMove = finalMoveSelection(context);
 		return chosenMove;
