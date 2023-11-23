@@ -76,7 +76,9 @@ public class UCD extends AI{
 			root = new Node(null, startingContext);
 			ArrayList<Context> contexts = new ArrayList<Context>();
 			contexts.add(startingContext);
-			transpoTable.put(startingContext.state().owned().sites(player), new Pair<Node,ArrayList<Context>>(root, contexts));
+			TIntArrayList id = startingContext.state().owned().sites(player);
+			id.add(startingContext.trial().moveNumber());
+			transpoTable.put(id, new Pair<Node,ArrayList<Context>>(root, contexts));
 		}
 		
 		// We'll respect any limitations on max seconds and max iterations (don't care about max depth)
@@ -193,17 +195,7 @@ public class UCD extends AI{
 
 		// Return the move we wish to play
 		Move chosenMove = finalMoveSelection(context);
-		// return chosenMove;
-
-
-		final Context contextFinal = new Context(context);
-		if (game.moves(contextFinal).moves().contains(chosenMove)){
-			return chosenMove;
-		}
-		else {
-			FastArrayList<Move> moves = context.game().moves(context).moves();
-			return moves.get(ThreadLocalRandom.current().nextInt(moves.size()));
-		}
+		return chosenMove;
 	}
 	
 	/**
@@ -278,8 +270,7 @@ public class UCD extends AI{
 		if (!current.unexpandedMoves.isEmpty())
 		{
 			// randomly select an unexpanded move
-			final Move move = current.unexpandedMoves.remove(
-					ThreadLocalRandom.current().nextInt(current.unexpandedMoves.size()));
+			final Move move = current.unexpandedMoves.remove(ThreadLocalRandom.current().nextInt(current.unexpandedMoves.size()));
 			
 			// create a copy of context
 			final Context context = new Context(current.context);
@@ -351,7 +342,9 @@ public class UCD extends AI{
 	{
 		int maxn = 0;
 		Move bestMove = null;
-		for (Edge edge : transpoTable.get(context.state().owned().sites(player)).key().exitingEdges){
+		TIntArrayList id = context.state().owned().sites(player);
+		id.add(context.trial().moveNumber());
+		for (Edge edge : transpoTable.get(id).key().exitingEdges){
 			if (edge.succ.visitCount > maxn){
 				maxn = edge.succ.visitCount;
 				bestMove = edge.move;
@@ -404,6 +397,10 @@ public class UCD extends AI{
 			Set<Edge> edges = new HashSet<>(nextLayer);
 			nextLayer.clear();
 			for (Edge edge : edges){
+				if (!(edge.pred.enteringEdges.size()==1 && edge.pred.enteringEdges.get(0) == null)) {
+					nextLayer.addAll(edge.pred.enteringEdges);
+				}
+
 				// No need to update twice
 				if (edge == path.peek()){
 					path.pop();
@@ -411,23 +408,14 @@ public class UCD extends AI{
 					edge.nd3 ++;
 					updateMean(edge, i, results);
 					edge.n ++;
-					if (!(edge.pred.enteringEdges.size()==1 && edge.pred.enteringEdges.get(0) == null)) {
-						nextLayer.addAll(edge.pred.enteringEdges);
-					}
 					continue;
 				}
 
 				if (i <= d2){
 					edge.nd2 ++;
-					if (!(edge.pred.enteringEdges.size()==1 && edge.pred.enteringEdges.get(0) == null)) {
-						nextLayer.addAll(edge.pred.enteringEdges);
-					}
 				}
 				if (i <= d3){
 					edge.nd3 ++;
-					if (!(edge.pred.enteringEdges.size()==1 && edge.pred.enteringEdges.get(0) == null)) {
-						nextLayer.addAll(edge.pred.enteringEdges);
-					}
 				}
 				if (i <= d1){
 					updateMean(edge, i, results);
@@ -441,8 +429,8 @@ public class UCD extends AI{
 			edge.nd3 ++;
 			updateMean(edge, max, results);
 			edge.n ++;
-			
 		}
+		return ;
 	}
 	
 	/**
@@ -602,14 +590,16 @@ public class UCD extends AI{
             Game game = pred.context.game();
             Context contextSucc = new Context(pred.context);
             game.apply(contextSucc, move);
-            if (transpoTable.containsKey(contextSucc.state().owned().sites(player))){
-                this.succ = transpoTable.get(contextSucc.state().owned().sites(player)).key();
-                transpoTable.get(contextSucc.state().owned().sites(player)).value().add(contextSucc);
+			TIntArrayList id = contextSucc.state().owned().sites(player);
+			id.add(contextSucc.trial().moveNumber());
+            if (transpoTable.containsKey(id)){
+                this.succ = transpoTable.get(id).key();
+                transpoTable.get(id).value().add(contextSucc);
             } else {
                 this.succ = new Node(this, contextSucc);
                 ArrayList<Context> contexts = new ArrayList<Context>();
                 contexts.add(contextSucc);
-                transpoTable.put(contextSucc.state().owned().sites(player), new Pair<Node,ArrayList<Context>>(this.succ, contexts));
+                transpoTable.put(id, new Pair<Node,ArrayList<Context>>(this.succ, contexts));
             }
 
             this.scoreMean = new double[game.players().count() + 1];

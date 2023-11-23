@@ -132,9 +132,6 @@ public class RunAI
 				// the next time step!
 			}
 			
-			// free memory of the tree
-			((HiddenUCT) ais.get(1)).reset();
-			System.gc();
 
 			// let's see what the result is
 			System.out.println(context.trial().status());
