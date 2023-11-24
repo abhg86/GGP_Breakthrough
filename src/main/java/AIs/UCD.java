@@ -8,10 +8,12 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ThreadLocalRandom;
 
+import com.kitfox.svg.A;
+
+import utils.Pair;
 import game.Game;
 import gnu.trove.list.array.TIntArrayList;
 import main.collections.FastArrayList;
-import main.collections.Pair;
 import other.AI;
 import other.RankUtils;
 import other.context.Context;
@@ -41,10 +43,11 @@ public class UCD extends AI{
 	protected Node root = null;
 
 	/** The maximum depth of the tree */
-	protected int maxDepth = 0;
+	protected int maxDepthReached = 0;
 
     /** The transposition table of existing nodes regrouped by similar observations from a player */
-	protected HashMap<TIntArrayList,Pair<Node,ArrayList<Context>>> transpoTable = new HashMap<TIntArrayList,Pair<Node,ArrayList<Context>>>();
+	// Have to use Arraylist for the key because pairs give different hashcode for the same content
+	protected HashMap<ArrayList<Set<Integer>>, Pair<Node, ArrayList<Context>>> transpoTable = new HashMap<ArrayList<Set<Integer>>, Pair<Node, ArrayList<Context>>>();
 
 	int d1 = 2;
 	int d2 = 1;
@@ -79,9 +82,18 @@ public class UCD extends AI{
 			root = new Node(null, startingContext);
 			ArrayList<Context> contexts = new ArrayList<Context>();
 			contexts.add(startingContext);
-			TIntArrayList id = startingContext.state().owned().sites(player);
-			id.add(startingContext.trial().moveNumber());
-			transpoTable.put(id, new Pair<Node,ArrayList<Context>>(root, contexts));
+			
+			TIntArrayList ownedSites = startingContext.state().owned().sites(player);
+			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
+			for (int i = 0; i < ownedSites.size(); i++) {
+				ownedSet.add(ownedSites.get(i));
+			}
+			ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
+			id.add(ownedSet);
+			HashSet<Integer> moveNumber = new HashSet<>();
+			moveNumber.add(startingContext.trial().moveNumber());
+			id.add(moveNumber);
+			transpoTable.put(id, new Pair<>(root, contexts));
 		}
 		
 		// We'll respect any limitations on max seconds and max iterations (don't care about max depth)
@@ -141,7 +153,7 @@ public class UCD extends AI{
 						followingLayer.add(current);
 					}
 				}
-
+				
 				if (current == null) {
 					// We're in a node that is impossible
 					break;
@@ -192,25 +204,13 @@ public class UCD extends AI{
 			++numIterations;
 		}
 
-		// System.out.println("number of iterations: " + numIterations);
+		System.out.println("number of iterations: " + numIterations);
 		// Return the only available action if there is only one (for example for a pass)
 		if (context.game().moves(context).moves().size() == 1)
 			return context.game().moves(context).moves().get(0);
 
 		// Return the move we wish to play
-		Move chosenMove = null;
-		try {
-			chosenMove = finalMoveSelection(context);
-		} catch (Exception e){
-			System.out.println("Exception");
-			// transpoTable.forEach((key, value) -> System.out.println(key + " " + value.key().visitCount));
-			TIntArrayList id = context.state().owned().sites(player);
-			id.add(context.trial().moveNumber());
-			System.out.println(id);
-			System.out.println("maxDepth: " + maxDepth);
-			System.exit(0);
-		}
-		// Move chosenMove = finalMoveSelection(context);
+		Move chosenMove = finalMoveSelection(context);
 		return chosenMove;
 	}
 	
@@ -369,8 +369,21 @@ public class UCD extends AI{
 	{
 		int maxn = 0;
 		Move bestMove = null;
-		TIntArrayList id = context.state().owned().sites(player);
-		id.add(context.trial().moveNumber());
+
+		TIntArrayList ownedSites = context.state().owned().sites(player);
+		Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
+		for (int i = 0; i < ownedSites.size(); i++) {
+			ownedSet.add(ownedSites.get(i));
+		}
+
+		ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
+		id.add(ownedSet);
+		HashSet<Integer> moveNumber = new HashSet<>();
+		moveNumber.add(context.trial().moveNumber());
+		id.add(moveNumber);
+		transpoTable.forEach((key, value) -> System.out.println(key));
+		System.out.println("id : " + id);
+
 		for (Edge edge : transpoTable.get(id).key().exitingEdges){
 			if (edge.succ.visitCount > maxn){
 				maxn = edge.succ.visitCount;
@@ -549,8 +562,8 @@ public class UCD extends AI{
 			this.enteringEdges.add(edge);
 			if (edge != null){
 				depth = edge.pred.depth + 1;
-				if (depth > maxDepth){
-					maxDepth = depth;
+				if (depth > maxDepthReached){
+					maxDepthReached = depth;
 				}
 			}
 			this.context = context;
@@ -621,9 +634,19 @@ public class UCD extends AI{
             Game game = pred.context.game();
             Context contextSucc = new Context(pred.context);
             game.apply(contextSucc, move);
-			TIntArrayList id = contextSucc.state().owned().sites(player);
-			id.add(contextSucc.trial().moveNumber());
-            if (transpoTable.containsKey(id)){
+
+			TIntArrayList ownedSites = contextSucc.state().owned().sites(player);
+			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
+			for (int i = 0; i < ownedSites.size(); i++) {
+				ownedSet.add(ownedSites.get(i));
+			}
+
+			ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
+			id.add(ownedSet);
+			HashSet<Integer> moveNumber = new HashSet<>();
+			moveNumber.add(contextSucc.trial().moveNumber());
+			id.add(moveNumber);
+			if (transpoTable.containsKey(id)){
                 this.succ = transpoTable.get(id).key();
                 transpoTable.get(id).value().add(contextSucc);
             } else {
