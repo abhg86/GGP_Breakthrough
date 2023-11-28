@@ -313,7 +313,6 @@ public class UCD extends AI{
 				newEdge.nd3 ++;
 				newEdge.n ++;
 				path.push(newEdge);
-				newNode.lastTouched = 1;
 				return newNode;
 			}
 			else {
@@ -354,7 +353,6 @@ public class UCD extends AI{
 			Edge newEdge = new Edge(move, current);
 			Node newNode = newEdge.succ;
 			path.push(newEdge);
-			newNode.lastTouched =2;
 			return newNode;
 		}
 
@@ -411,7 +409,6 @@ public class UCD extends AI{
         }
         
 		path.push(bestChild);
-		bestChild.succ.lastTouched = 3;
         return bestChild.succ;
 	}
 	
