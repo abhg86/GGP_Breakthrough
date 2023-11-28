@@ -34,11 +34,9 @@ public class UCD extends AI{
 	/** Our player index */
 	protected int player = -1;
 
-	/** The layer of the tree that comes after the current state of the game*/
-	protected Set<Node> followingLayer = new HashSet<>();
-
 	/** The root node of the tree */
 	protected Node root = null;
+	protected Context startingContext = null;
 
 	/** The maximum depth of the tree */
 	protected int maxDepthReached = 0;
@@ -75,12 +73,12 @@ public class UCD extends AI{
 		// Start out by creating a new root node if it doesn't exist yet
 		if (root == null){
 			Trial trial = new Trial(context.game());
-			Context startingContext = new Context(context.game(), trial);
+			startingContext = new Context(context.game(), trial);
 			game.start(startingContext);
-			root = new Node(null, startingContext);
 			ArrayList<Context> contexts = new ArrayList<Context>();
 			contexts.add(startingContext);
 			
+			//Compute id of the root context
 			TIntArrayList ownedSites = startingContext.state().owned().sites(player);
 			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
 			for (int i = 0; i < ownedSites.size(); i++) {
@@ -91,6 +89,9 @@ public class UCD extends AI{
 			HashSet<Integer> moveNumber = new HashSet<>();
 			moveNumber.add(startingContext.trial().moveNumber());
 			id.add(moveNumber);
+			
+			root = new Node(null, startingContext, id);
+
 			transpoTable.put(id, new Pair<>(root, contexts));
 		}
 		
@@ -104,7 +105,6 @@ public class UCD extends AI{
 		List<Move> realMoves = context.trial().generateRealMovesList();
 		
 		List<Context> realContexts = new ArrayList<Context>();
-		followingLayer.clear();
 		
 		// Our main loop through MCTS iterations
 		while 
@@ -116,40 +116,41 @@ public class UCD extends AI{
 		{
 			// Start in root node
 			Node current = root;
+			Context currentContext = new Context(startingContext);
 			if (realContexts.isEmpty()){
-				realContexts.add(root.context);
+				realContexts.add(startingContext);
 			}
-			Context realContext = new Context(root.context);
+			Context realContext = new Context(startingContext);
 			
 			int nbMoves = 0;
 			Stack<Edge> path = new Stack<Edge>();
+
 			// Traverse tree
 			while (true)
 			{
 				if (nbMoves < realMoves.size()){
+					// We're in a node corresponding to a move of the player that has already been played
 					if (nbMoves < realContexts.size() -1){
+						// We get the situation from the equivalent time for the real game if already computed
 						realContext = realContexts.get(nbMoves + 1);
 					}
 					else {
+						// We compute it otherwise
 						realContext = new Context(realContext);
 						realContext.game().apply(realContext, realMoves.get(nbMoves));
 						realContexts.add(realContext);
 					}
 
-					if (current.context.state().mover() == player ){
+					if (currentContext.state().mover() == player ){
 						// We're in a node corresponding to a move of the player that has already been played
-						current = select(current, realMoves.get(nbMoves), realContext, path);
+						current = select(current, realMoves.get(nbMoves), realContext, path, currentContext);
 					} else {
 						// We're in a node corresponding to a move of the opponent but before the current state of the game
-						current = select(current, null, realContext, path);
+						current = select(current, null, realContext, path, currentContext);
 					}
 				} else {
 					// We're in a node corresponding to after the current state of the game
-					current = select(current, null, null, path);
-					
-					if (nbMoves == realMoves.size()) { 
-						followingLayer.add(current);
-					}
+					current = select(current, null, null, path, currentContext);
 				}
 				
 				if (current == null) {
@@ -157,7 +158,7 @@ public class UCD extends AI{
 					break;
 				}
 
-				if (current.context.trial().over())
+				if (currentContext.trial().over())
 				{
 					// We've reached a terminal state
 					break;
@@ -172,7 +173,7 @@ public class UCD extends AI{
 			}
 			
 			if (current != null){
-				Context contextEnd = current.context;
+				Context contextEnd = currentContext;
 				
 				if (!contextEnd.trial().over())
 				{
@@ -216,11 +217,13 @@ public class UCD extends AI{
 	 * Selects child of the given "current" node according to UCB1 equation.
 	 * This method also implements the "Expansion" phase of MCTS, and creates
 	 * a new node if the given current node has unexpanded moves.
+	 * <p>
+	 * /!\ Update currentContext
 	 * 
 	 * @param current
 	 * @return Selected node (if it has 0 visits, it will be a newly-expanded node).
 	 */
-	public Node select(final Node current, final Move realMove, Context realContext, Stack<Edge> path)
+	public Node select(final Node current, final Move realMove, Context realContext, Stack<Edge> path, Context currentContext)
 	{
 		ArrayList<Set<Integer>> idRealContext = new ArrayList<Set<Integer>>();
 		if (realContext != null){
@@ -252,24 +255,13 @@ public class UCD extends AI{
 				// Iterator and breaks because of concurrentModificationException
 				Edge child = iterator.next();
 				if (child.move.equals(realMove)){
-					TIntArrayList ownedSites2 = child.succ.context.state().owned().sites(player);
-					Set<Integer> ownedSet2 = new HashSet<>(ownedSites2.size());
-					for (int i = 0; i < ownedSites2.size(); i++) {
-						ownedSet2.add(ownedSites2.get(i));
-					}
-
-					id2 = new ArrayList<Set<Integer>>();
-					id2.add(ownedSet2);
-					HashSet<Integer> moveNumber2 = new HashSet<>();
-					moveNumber2.add(child.succ.context.trial().moveNumber());
-					id2.add(moveNumber2);
-					if (!isCoherent(id2, idRealContext)){
+					// We have the right move played so we return the corresponding child and delete the others, useless ones
+					if (!isCoherent(child.succ.id, idRealContext)){
 						currentImpossible = true;
-						break;
 					} else {
 						found = child;
-						break;
 					}
+					break;
 				}
 				// It's not the right move played so we remove it
 				iterator.remove();
@@ -278,7 +270,7 @@ public class UCD extends AI{
 			if (currentImpossible) {
 				// unexpandedMoves already cleared
 				current.exitingEdges.clear();
-				propagateImpossible(current, id2);
+				propagateImpossible(current);
 				return null;
 			}
 
@@ -287,10 +279,14 @@ public class UCD extends AI{
 				current.exitingEdges.clear();
 				current.exitingEdges.add(found);
 				path.push(found);
+
+				// We update the current context
+				currentContext.game().apply(currentContext, found.move);
+
 				return found.succ;
 			}
 
-			final Context context = new Context(current.context);
+			final Context context = new Context(currentContext);
 			context.game().apply(context, realMove);
 
 			TIntArrayList ownedSites2 = context.state().owned().sites(player);
@@ -298,14 +294,14 @@ public class UCD extends AI{
 			for (int i = 0; i < ownedSites2.size(); i++) {
 				ownedSet2.add(ownedSites2.get(i));
 			}
-
 			id2 = new ArrayList<Set<Integer>>();
 			id2.add(ownedSet2);
 			HashSet<Integer> moveNumber2 = new HashSet<>();
 			moveNumber2.add(context.trial().moveNumber());
 			id2.add(moveNumber2);
+
 			if (isCoherent(idRealContext, id2)){
-				Edge newEdge = new Edge(realMove, current);
+				Edge newEdge = createEdge(realMove, current, id2, context, path);
 				Node newNode = newEdge.succ;
 				// We don't want to stop here so we add 1 to the visitCount
 				newNode.visitCount = 1;
@@ -313,11 +309,15 @@ public class UCD extends AI{
 				newEdge.nd3 ++;
 				newEdge.n ++;
 				path.push(newEdge);
+
+				// We update the current context
+				currentContext = context;
+
 				return newNode;
 			}
 			else {
 				current.exitingEdges.clear();
-				propagateImpossible(current, id2);
+				propagateImpossible(current);
 				return null;
 			}
 		}
@@ -328,7 +328,7 @@ public class UCD extends AI{
 			final Move move = current.unexpandedMoves.remove(ThreadLocalRandom.current().nextInt(current.unexpandedMoves.size()));
 			
 			// create a copy of context
-			final Context context = new Context(current.context);
+			final Context context = new Context(currentContext);
 			
 			// apply the move
 			context.game().apply(context, move);
@@ -346,13 +346,17 @@ public class UCD extends AI{
 			id2.add(moveNumber2);
 
 			if (realContext != null && ! (isCoherent(id2, idRealContext))){
-				propagateImpossible(current, id2);
+				propagateImpossible(current);
 				return null;
 			}
 			// create new node and return it
-			Edge newEdge = new Edge(move, current);
+			Edge newEdge = createEdge(move, current, id2, context, path);
 			Node newNode = newEdge.succ;
 			path.push(newEdge);
+
+			// We update the current context
+			currentContext = context;
+
 			return newNode;
 		}
 
@@ -365,7 +369,6 @@ public class UCD extends AI{
 		if (current.exitingEdges.isEmpty()){
 			// No unexpanded moves normally
 			System.out.println("Impossible node weirdly not deleted");
-			System.out.println("nb entering edges : " + current.enteringEdges.size());
 			// System.out.println("last touched by : " + current.lastTouched);
 			// if (!(current.enteringEdges.size()==1 && current.enteringEdges.get(0) == null)) {
 			// 	current.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
@@ -381,7 +384,7 @@ public class UCD extends AI{
         int numBestFound = 0;
         
         final int numChildren = current.exitingEdges.size();
-        final int mover = current.context.state().mover();
+        final int mover = currentContext.state().mover();
 
         for (int i = 0; i < numChildren; ++i) 
         {
@@ -390,7 +393,7 @@ public class UCD extends AI{
         	final double explore = Math.sqrt(twoParentLog / child.nd3);
         
             final double ucb1Value = exploit + explore;
-            
+
             if (ucb1Value > bestValue)
             {
                 bestValue = ucb1Value;
@@ -409,6 +412,10 @@ public class UCD extends AI{
         }
         
 		path.push(bestChild);
+
+		// We update the current context
+		currentContext.game().apply(currentContext, bestChild.move);
+
         return bestChild.succ;
 	}
 	
@@ -425,17 +432,18 @@ public class UCD extends AI{
 		int maxn = 0;
 		Move bestMove = null;
 
+		// Compute id of the context
 		TIntArrayList ownedSites = context.state().owned().sites(player);
 		Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
 		for (int i = 0; i < ownedSites.size(); i++) {
 			ownedSet.add(ownedSites.get(i));
 		}
-
 		ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
 		id.add(ownedSet);
 		HashSet<Integer> moveNumber = new HashSet<>();
 		moveNumber.add(context.trial().moveNumber());
 		id.add(moveNumber);
+
 		for (Edge edge : transpoTable.get(id).key().exitingEdges){
 			if (edge.succ.visitCount > maxn){
 				maxn = edge.succ.visitCount;
@@ -464,30 +472,18 @@ public class UCD extends AI{
 		}
 	}
 
-	private void propagateImpossible(Node parent, ArrayList<Set<Integer>> id){
+	private void propagateImpossible(Node parent){
 		if (!parent.unexpandedMoves.isEmpty()){
 			return;
 		}
 
 		if (parent.exitingEdges.isEmpty()){
 			// No unexpanded moves normally
-			transpoTable.remove(id);
+			transpoTable.remove(parent.id);
 			if (!(parent.enteringEdges.size()==1 && parent.enteringEdges.get(0) == null)) {
 				for (Edge edge : parent.enteringEdges){
 					edge.pred.exitingEdges.remove(edge);
-
-					TIntArrayList ownedSites2 = edge.pred.context.state().owned().sites(player);
-					Set<Integer> ownedSet2 = new HashSet<>(ownedSites2.size());
-					for (int i = 0; i < ownedSites2.size(); i++) {
-						ownedSet2.add(ownedSites2.get(i));
-					}
-					ArrayList<Set<Integer>> id2 = new ArrayList<Set<Integer>>();
-					id2.add(ownedSet2);
-					HashSet<Integer> moveNumber2 = new HashSet<>();
-					moveNumber2.add(edge.pred.context.trial().moveNumber());
-					id2.add(moveNumber2);
-
-					propagateImpossible(edge.pred, id2);
+					propagateImpossible(edge.pred);
 				}
 			}
 		}
@@ -603,9 +599,9 @@ public class UCD extends AI{
 		/** Exiting Edges */
 		private final List<Edge> exitingEdges = new ArrayList<Edge>();
 		
-		/** This objects contains the game state for this node (this is why we don't support stochastic games) */
-		private final Context context;
-		
+		/** The id of the observation of this Node for the transposition table */
+		private ArrayList<Set<Integer>> id;
+
 		/** Visit count for this node */
 		private int visitCount = 0;
 
@@ -632,7 +628,44 @@ public class UCD extends AI{
 					maxDepthReached = depth;
 				}
 			}
-			this.context = context;
+
+			TIntArrayList ownedSites = context.state().owned().sites(player);
+			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
+			for (int i = 0; i < ownedSites.size(); i++) {
+				ownedSet.add(ownedSites.get(i));
+			}
+			ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
+			id.add(ownedSet);
+			HashSet<Integer> moveNumber = new HashSet<>();
+			moveNumber.add(context.trial().moveNumber());
+			id.add(moveNumber);
+
+			this.id = id;
+			
+			// For simplicity, we just take ALL legal moves. 
+			// This means we do not support simultaneous-move games.
+			unexpandedMoves = new FastArrayList<Move>(context.game().moves(context).moves());
+		}
+
+		/**
+		 * Constructor
+		 * 
+		 * @param parent
+		 * @param moveFromParent
+		 * @param context
+		 * @param id
+		 */
+		public Node(final Edge edge, final Context context, ArrayList<Set<Integer>> id)
+		{
+			this.enteringEdges.add(edge);
+			if (edge != null){
+				depth = edge.pred.depth + 1;
+				if (depth > maxDepthReached){
+					maxDepthReached = depth;
+				}
+			}
+
+			this.id = id;
 			
 			// For simplicity, we just take ALL legal moves. 
 			// This means we do not support simultaneous-move games.
@@ -657,6 +690,8 @@ public class UCD extends AI{
         /** The node that is at the end of this edge */
         private final Node succ;
 
+		/** The context corresponding to the  */
+
 		/** For every player, mean of utilities / scores backpropagated through this node */
 		private double[] scoreMean;
 
@@ -680,9 +715,9 @@ public class UCD extends AI{
          * 
          * @param move
          * @param pred
-         * @param succ
+         * @param contextSucc
          */
-        public Edge(final Move move, final Node pred)
+        public Edge(final Move move, final Node pred, Context contextSucc)
         {
             this.move = move;
             this.pred = pred;
@@ -697,38 +732,90 @@ public class UCD extends AI{
             pred.exitingEdges.add(this);
 
             // Create the successor node if doesn't exist yet and add it to the transposition table
-            Game game = pred.context.game();
-            Context contextSucc = new Context(pred.context);
-            game.apply(contextSucc, move);
-
 			TIntArrayList ownedSites = contextSucc.state().owned().sites(player);
 			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
 			for (int i = 0; i < ownedSites.size(); i++) {
 				ownedSet.add(ownedSites.get(i));
 			}
-
 			ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
 			id.add(ownedSet);
 			HashSet<Integer> moveNumber = new HashSet<>();
 			moveNumber.add(contextSucc.trial().moveNumber());
 			id.add(moveNumber);
+
 			if (transpoTable.containsKey(id)){
                 this.succ = transpoTable.get(id).key();
                 transpoTable.get(id).value().add(contextSucc);
             } else {
-                this.succ = new Node(this, contextSucc);
+                this.succ = new Node(this, contextSucc, id);
                 ArrayList<Context> contexts = new ArrayList<Context>();
                 contexts.add(contextSucc);
                 transpoTable.put(id, new Pair<Node,ArrayList<Context>>(this.succ, contexts));
             }
 
-            this.scoreMean = new double[game.players().count() + 1];
-			this.deltaMean = new double[game.players().count() + 1];
+            this.scoreMean = new double[contextSucc.game().players().count() + 1];
+			this.deltaMean = new double[contextSucc.game().players().count() + 1];
             this.nd2 = 0;
             this.nd3 = 0;
         }
-        
+
+		/**
+         * Constructor
+         * 
+         * @param move
+         * @param pred
+         * @param succ
+		 * @param id
+		 * @param contextSucc
+         */
+        public Edge(final Move move, final Node pred, ArrayList<Set<Integer>> id, Context contextSucc)
+        {
+            this.move = move;
+            this.pred = pred;
+
+			// Set n_prime for the pred node (i.e. all entering edges) if it is the first time we create a child
+			if (pred.exitingEdges.isEmpty() && !(pred.enteringEdges.size()==1 && pred.enteringEdges.get(0) == null)){
+				for (Edge edge : pred.enteringEdges){
+					edge.n_prime = edge.n;
+				}
+			}
+
+            pred.exitingEdges.add(this);
+
+            // Create the successor node if doesn't exist yet and add it to the transposition table
+			if (transpoTable.containsKey(id)){
+                this.succ = transpoTable.get(id).key();
+                transpoTable.get(id).value().add(contextSucc);
+            } else {
+                this.succ = new Node(this, contextSucc, id);
+                ArrayList<Context> contexts = new ArrayList<Context>();
+                contexts.add(contextSucc);
+                transpoTable.put(id, new Pair<Node,ArrayList<Context>>(this.succ, contexts));
+            }
+
+            this.scoreMean = new double[contextSucc.game().players().count() + 1];
+			this.deltaMean = new double[contextSucc.game().players().count() + 1];
+            this.nd2 = 0;
+            this.nd3 = 0;
+        }
     }
+
+	public  Edge createEdge(final Move move, final Node pred, ArrayList<Set<Integer>> id, Context contextSucc, Stack<Edge> path){
+		Edge edge = new Edge(move, pred, id, contextSucc);
+
+		// If there is only one move (probably a pass), we directly create the pass edge to avoid problems
+		if (edge.succ.unexpandedMoves.size() == 1){
+			Context contextSucc2 = new Context(contextSucc);
+			contextSucc2.game().apply(contextSucc2, edge.succ.unexpandedMoves.get(0));
+			Edge passEdge = new Edge(edge.succ.unexpandedMoves.get(0), edge.succ, contextSucc2);
+			edge.succ.unexpandedMoves.clear();
+			path.push(edge);
+			return passEdge;
+		} else {
+			return edge;
+		}
+	}
+
 	//-------------------------------------------------------------------------
 
 }
