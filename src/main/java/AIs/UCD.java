@@ -8,8 +8,6 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ThreadLocalRandom;
 
-import com.kitfox.svg.A;
-
 import utils.Pair;
 import game.Game;
 import gnu.trove.list.array.TIntArrayList;
@@ -224,6 +222,22 @@ public class UCD extends AI{
 	 */
 	public Node select(final Node current, final Move realMove, Context realContext, Stack<Edge> path)
 	{
+		ArrayList<Set<Integer>> idRealContext = new ArrayList<Set<Integer>>();
+		if (realContext != null){
+			// Compute id of real context
+			TIntArrayList ownedSites = realContext.state().owned().sites(player);
+			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
+			for (int i = 0; i < ownedSites.size(); i++) {
+				ownedSet.add(ownedSites.get(i));
+			}
+			idRealContext = new ArrayList<Set<Integer>>();
+			idRealContext.add(ownedSet);
+			HashSet<Integer> moveNumber = new HashSet<>();
+			moveNumber.add(realContext.trial().moveNumber());
+			idRealContext.add(moveNumber);
+		}
+
+
 		if (realMove != null){
 			// We're in a node corresponding to a move of the player that has already been played so we expand only toward this move
 			current.unexpandedMoves.clear();
@@ -231,12 +245,25 @@ public class UCD extends AI{
 			Boolean currentImpossible = false;
 			Edge found = null;
 
+			ArrayList<Set<Integer>> id2 = new ArrayList<Set<Integer>>();
+
 			// If the node has already been explored, no need to create a new node
 			for (java.util.Iterator<Edge> iterator = current.exitingEdges.iterator();  iterator.hasNext();  ){
 				// Iterator and breaks because of concurrentModificationException
 				Edge child = iterator.next();
 				if (child.move.equals(realMove)){
-					if (!isCoherent(child.succ.context, realContext)){
+					TIntArrayList ownedSites2 = child.succ.context.state().owned().sites(player);
+					Set<Integer> ownedSet2 = new HashSet<>(ownedSites2.size());
+					for (int i = 0; i < ownedSites2.size(); i++) {
+						ownedSet2.add(ownedSites2.get(i));
+					}
+
+					id2 = new ArrayList<Set<Integer>>();
+					id2.add(ownedSet2);
+					HashSet<Integer> moveNumber2 = new HashSet<>();
+					moveNumber2.add(child.succ.context.trial().moveNumber());
+					id2.add(moveNumber2);
+					if (!isCoherent(id2, idRealContext)){
 						currentImpossible = true;
 						break;
 					} else {
@@ -251,7 +278,7 @@ public class UCD extends AI{
 			if (currentImpossible) {
 				// unexpandedMoves already cleared
 				current.exitingEdges.clear();
-				propagateImpossible(current);
+				propagateImpossible(current, id2);
 				return null;
 			}
 
@@ -265,7 +292,19 @@ public class UCD extends AI{
 
 			final Context context = new Context(current.context);
 			context.game().apply(context, realMove);
-			if (isCoherent(realContext, context)){
+
+			TIntArrayList ownedSites2 = context.state().owned().sites(player);
+			Set<Integer> ownedSet2 = new HashSet<>(ownedSites2.size());
+			for (int i = 0; i < ownedSites2.size(); i++) {
+				ownedSet2.add(ownedSites2.get(i));
+			}
+
+			id2 = new ArrayList<Set<Integer>>();
+			id2.add(ownedSet2);
+			HashSet<Integer> moveNumber2 = new HashSet<>();
+			moveNumber2.add(context.trial().moveNumber());
+			id2.add(moveNumber2);
+			if (isCoherent(idRealContext, id2)){
 				Edge newEdge = new Edge(realMove, current);
 				Node newNode = newEdge.succ;
 				// We don't want to stop here so we add 1 to the visitCount
@@ -274,11 +313,12 @@ public class UCD extends AI{
 				newEdge.nd3 ++;
 				newEdge.n ++;
 				path.push(newEdge);
+				newNode.lastTouched = 1;
 				return newNode;
 			}
 			else {
 				current.exitingEdges.clear();
-				propagateImpossible(current);
+				propagateImpossible(current, id2);
 				return null;
 			}
 		}
@@ -293,14 +333,28 @@ public class UCD extends AI{
 			
 			// apply the move
 			context.game().apply(context, move);
-			if (realContext != null && ! (isCoherent(context, realContext))){
-				propagateImpossible(current);
+
+			//Compute id of the new context
+			TIntArrayList ownedSites2 = context.state().owned().sites(player);
+			Set<Integer> ownedSet2 = new HashSet<>(ownedSites2.size());
+			for (int i = 0; i < ownedSites2.size(); i++) {
+				ownedSet2.add(ownedSites2.get(i));
+			}
+			ArrayList<Set<Integer>> id2 = new ArrayList<Set<Integer>>();
+			id2.add(ownedSet2);
+			HashSet<Integer> moveNumber2 = new HashSet<>();
+			moveNumber2.add(context.trial().moveNumber());
+			id2.add(moveNumber2);
+
+			if (realContext != null && ! (isCoherent(id2, idRealContext))){
+				propagateImpossible(current, id2);
 				return null;
 			}
 			// create new node and return it
 			Edge newEdge = new Edge(move, current);
 			Node newNode = newEdge.succ;
 			path.push(newEdge);
+			newNode.lastTouched =2;
 			return newNode;
 		}
 
@@ -312,10 +366,13 @@ public class UCD extends AI{
 		// check if the node is impossible (happens, despite the cleaning with propagateImpossible, for some reason)
 		if (current.exitingEdges.isEmpty()){
 			// No unexpanded moves normally
-			if (!(current.enteringEdges.size()==1 && current.enteringEdges.get(0) == null)) {
-				current.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
-				current.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
-			}
+			System.out.println("Impossible node weirdly not deleted");
+			System.out.println("nb entering edges : " + current.enteringEdges.size());
+			// System.out.println("last touched by : " + current.lastTouched);
+			// if (!(current.enteringEdges.size()==1 && current.enteringEdges.get(0) == null)) {
+			// 	current.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
+			// 	current.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
+			// }
 			return null;
 		}
 
@@ -354,6 +411,7 @@ public class UCD extends AI{
         }
         
 		path.push(bestChild);
+		bestChild.succ.lastTouched = 3;
         return bestChild.succ;
 	}
 	
@@ -381,9 +439,6 @@ public class UCD extends AI{
 		HashSet<Integer> moveNumber = new HashSet<>();
 		moveNumber.add(context.trial().moveNumber());
 		id.add(moveNumber);
-		transpoTable.forEach((key, value) -> System.out.println(key));
-		System.out.println("id : " + id);
-
 		for (Edge edge : transpoTable.get(id).key().exitingEdges){
 			if (edge.succ.visitCount > maxn){
 				maxn = edge.succ.visitCount;
@@ -403,8 +458,8 @@ public class UCD extends AI{
 		return bestMove;
 	}
 
-	private boolean isCoherent(Context context, Context predictedContext){
-		if (context.state().owned().sites(player).equals(predictedContext.state().owned().sites(player))){
+	private boolean isCoherent(ArrayList<Set<Integer>> idContext, ArrayList<Set<Integer>> idPredictedContext){
+		if (idContext.equals(idPredictedContext)){
 			return true;
 		}
 		else {
@@ -412,17 +467,31 @@ public class UCD extends AI{
 		}
 	}
 
-	private void propagateImpossible(Node parent){
+	private void propagateImpossible(Node parent, ArrayList<Set<Integer>> id){
 		if (!parent.unexpandedMoves.isEmpty()){
 			return;
 		}
 
 		if (parent.exitingEdges.isEmpty()){
-			parent.exitingEdges.clear();
 			// No unexpanded moves normally
+			transpoTable.remove(id);
 			if (!(parent.enteringEdges.size()==1 && parent.enteringEdges.get(0) == null)) {
-				parent.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
-				parent.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
+				for (Edge edge : parent.enteringEdges){
+					edge.pred.exitingEdges.remove(edge);
+
+					TIntArrayList ownedSites2 = edge.pred.context.state().owned().sites(player);
+					Set<Integer> ownedSet2 = new HashSet<>(ownedSites2.size());
+					for (int i = 0; i < ownedSites2.size(); i++) {
+						ownedSet2.add(ownedSites2.get(i));
+					}
+					ArrayList<Set<Integer>> id2 = new ArrayList<Set<Integer>>();
+					id2.add(ownedSet2);
+					HashSet<Integer> moveNumber2 = new HashSet<>();
+					moveNumber2.add(edge.pred.context.trial().moveNumber());
+					id2.add(moveNumber2);
+
+					propagateImpossible(edge.pred, id2);
+				}
 			}
 		}
 		return;
