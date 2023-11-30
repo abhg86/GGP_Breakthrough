@@ -138,6 +138,7 @@ public class UCD extends AI{
 						realContext = new Context(realContext);
 						realContext.game().apply(realContext, realMoves.get(nbMoves*2));
 						// Apply the pass move
+						realContext = new Context(realContext);
 						realContext.game().apply(realContext, realContext.moves(realContext).get(0));
 						realContexts.add(realContext);
 						realId = createID(realContext);
@@ -173,6 +174,7 @@ public class UCD extends AI{
 					break;
 				}
 				nbMoves++;
+				System.out.println("current mover : " + currentContext);
 			}
 			
 			if (current != null){
@@ -270,16 +272,19 @@ public class UCD extends AI{
 				path.push(found);
 
 				// We update the current context
+				currentContext = new Context(currentContext);
 				currentContext.game().apply(currentContext, found.move);
 				// Apply the pass move
+				currentContext = new Context(currentContext);
 				currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
 
 				return found.succ;
 			}
 
-			final Context context = new Context(currentContext);
+			Context context = new Context(currentContext);
 			context.game().apply(context, realMove);
 			// Apply the pass move
+			context = new Context(context);
 			context.game().apply(context, context.moves(context).get(0));
 
 			id2 = createID(context);
@@ -312,18 +317,18 @@ public class UCD extends AI{
 			final Move move = current.unexpandedMoves.remove(ThreadLocalRandom.current().nextInt(current.unexpandedMoves.size()));
 			
 			// create a copy of context
-			final Context context = new Context(currentContext);
+			Context context = new Context(currentContext);
 			
 			// apply the move
+			System.out.println("mover : " + context.state().mover());
 			context.game().apply(context, move);
 			// Apply the pass move
-			Moves pass = context.moves(context);
-			System.out.println("then : " + pass.then());
-			FastArrayList<Move> passMoves = pass.moves();
-			System.out.println("then : " + pass.then().moves());
-			passMoves.add(pass.then().moves().get(0));
-			System.out.println("passMoves : " + passMoves);
-			context.game().apply(context, new Move(passMoves));
+			// Needs to recreate a context, else it crashes 
+			context = new Context(context);
+			System.out.println("mover : " + context.state().mover());
+			System.out.println("move : " + move);
+			System.out.println("move : " + context.game().moves(context).moves().get(0));
+			context.game().apply(context, context.game().moves(context).moves().get(0));
 
 			//Compute id of the new context
 			ArrayList<Set<Integer>> id2 = createID(context);
@@ -351,7 +356,7 @@ public class UCD extends AI{
 		// check if the node is impossible (happens, despite the cleaning with propagateImpossible, for some reason)
 		if (current.exitingEdges.isEmpty()){
 			// No unexpanded moves normally
-			// System.out.println("Impossible node weirdly not deleted");
+			System.out.println("Impossible node weirdly not deleted");
 			// if (!(current.enteringEdges.size()==1 && current.enteringEdges.get(0) == null)) {
 			// 	current.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
 			// 	current.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
@@ -396,8 +401,10 @@ public class UCD extends AI{
 		path.push(bestChild);
 
 		// We update the current context
+		currentContext = new Context(currentContext);
 		currentContext.game().apply(currentContext, bestChild.move);
 		// Apply the pass move
+		currentContext = new Context(currentContext);
 		currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
 
         return bestChild.succ;
