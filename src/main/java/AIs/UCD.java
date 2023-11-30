@@ -8,8 +8,12 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ThreadLocalRandom;
 
+import com.kitfox.svg.A;
+
 import utils.Pair;
 import game.Game;
+import game.rules.play.moves.Moves;
+import game.rules.play.moves.nonDecision.effect.Then;
 import gnu.trove.list.array.TIntArrayList;
 import main.collections.FastArrayList;
 import other.AI;
@@ -79,16 +83,7 @@ public class UCD extends AI{
 			contexts.add(startingContext);
 			
 			//Compute id of the root context
-			TIntArrayList ownedSites = startingContext.state().owned().sites(player);
-			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
-			for (int i = 0; i < ownedSites.size(); i++) {
-				ownedSet.add(ownedSites.get(i));
-			}
-			ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
-			id.add(ownedSet);
-			HashSet<Integer> moveNumber = new HashSet<>();
-			moveNumber.add(startingContext.trial().moveNumber());
-			id.add(moveNumber);
+			ArrayList<Set<Integer>> id = createID(startingContext);
 			
 			root = new Node(null, startingContext, id);
 
@@ -105,6 +100,7 @@ public class UCD extends AI{
 		List<Move> realMoves = context.trial().generateRealMovesList();
 		
 		List<Context> realContexts = new ArrayList<Context>();
+		List<ArrayList<Set<Integer>>> realIds = new ArrayList<ArrayList<Set<Integer>>>();
 		
 		// Our main loop through MCTS iterations
 		while 
@@ -117,10 +113,12 @@ public class UCD extends AI{
 			// Start in root node
 			Node current = root;
 			Context currentContext = new Context(startingContext);
-			if (realContexts.isEmpty()){
-				realContexts.add(startingContext);
-			}
 			Context realContext = new Context(startingContext);
+			ArrayList<Set<Integer>> realId = createID(startingContext);
+			if (realContexts.isEmpty()){
+				realContexts.add(realContext);
+				realIds.add(realId);
+			}
 			
 			int nbMoves = 0;
 			Stack<Edge> path = new Stack<Edge>();
@@ -128,25 +126,30 @@ public class UCD extends AI{
 			// Traverse tree
 			while (true)
 			{
-				if (nbMoves < realMoves.size()){
+				if (nbMoves < (realMoves.size() + 1)/2){
 					// We're in a node corresponding to a move of the player that has already been played
 					if (nbMoves < realContexts.size() -1){
 						// We get the situation from the equivalent time for the real game if already computed
 						realContext = realContexts.get(nbMoves + 1);
+						realId = realIds.get(nbMoves + 1);
 					}
 					else {
 						// We compute it otherwise
 						realContext = new Context(realContext);
-						realContext.game().apply(realContext, realMoves.get(nbMoves));
+						realContext.game().apply(realContext, realMoves.get(nbMoves*2));
+						// Apply the pass move
+						realContext.game().apply(realContext, realContext.moves(realContext).get(0));
 						realContexts.add(realContext);
+						realId = createID(realContext);
+						realIds.add(realId);
 					}
 
 					if (currentContext.state().mover() == player ){
 						// We're in a node corresponding to a move of the player that has already been played
-						current = select(current, realMoves.get(nbMoves), realContext, path, currentContext);
+						current = select(current, realMoves.get(nbMoves*2), realId, path, currentContext);
 					} else {
 						// We're in a node corresponding to a move of the opponent but before the current state of the game
-						current = select(current, null, realContext, path, currentContext);
+						current = select(current, null, realId, path, currentContext);
 					}
 				} else {
 					// We're in a node corresponding to after the current state of the game
@@ -223,22 +226,8 @@ public class UCD extends AI{
 	 * @param current
 	 * @return Selected node (if it has 0 visits, it will be a newly-expanded node).
 	 */
-	public Node select(final Node current, final Move realMove, Context realContext, Stack<Edge> path, Context currentContext)
+	public Node select(final Node current, final Move realMove, ArrayList<Set<Integer>> idRealContext, Stack<Edge> path, Context currentContext)
 	{
-		ArrayList<Set<Integer>> idRealContext = new ArrayList<Set<Integer>>();
-		if (realContext != null){
-			// Compute id of real context
-			TIntArrayList ownedSites = realContext.state().owned().sites(player);
-			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
-			for (int i = 0; i < ownedSites.size(); i++) {
-				ownedSet.add(ownedSites.get(i));
-			}
-			idRealContext = new ArrayList<Set<Integer>>();
-			idRealContext.add(ownedSet);
-			HashSet<Integer> moveNumber = new HashSet<>();
-			moveNumber.add(realContext.trial().moveNumber());
-			idRealContext.add(moveNumber);
-		}
 
 
 		if (realMove != null){
@@ -282,26 +271,21 @@ public class UCD extends AI{
 
 				// We update the current context
 				currentContext.game().apply(currentContext, found.move);
+				// Apply the pass move
+				currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
 
 				return found.succ;
 			}
 
 			final Context context = new Context(currentContext);
 			context.game().apply(context, realMove);
+			// Apply the pass move
+			context.game().apply(context, context.moves(context).get(0));
 
-			TIntArrayList ownedSites2 = context.state().owned().sites(player);
-			Set<Integer> ownedSet2 = new HashSet<>(ownedSites2.size());
-			for (int i = 0; i < ownedSites2.size(); i++) {
-				ownedSet2.add(ownedSites2.get(i));
-			}
-			id2 = new ArrayList<Set<Integer>>();
-			id2.add(ownedSet2);
-			HashSet<Integer> moveNumber2 = new HashSet<>();
-			moveNumber2.add(context.trial().moveNumber());
-			id2.add(moveNumber2);
+			id2 = createID(context);
 
 			if (isCoherent(idRealContext, id2)){
-				Edge newEdge = createEdge(realMove, current, id2, context, path);
+				Edge newEdge = new Edge(realMove, current, id2, context);
 				Node newNode = newEdge.succ;
 				// We don't want to stop here so we add 1 to the visitCount
 				newNode.visitCount = 1;
@@ -332,25 +316,24 @@ public class UCD extends AI{
 			
 			// apply the move
 			context.game().apply(context, move);
+			// Apply the pass move
+			Moves pass = context.moves(context);
+			System.out.println("then : " + pass.then());
+			FastArrayList<Move> passMoves = pass.moves();
+			System.out.println("then : " + pass.then().moves());
+			passMoves.add(pass.then().moves().get(0));
+			System.out.println("passMoves : " + passMoves);
+			context.game().apply(context, new Move(passMoves));
 
 			//Compute id of the new context
-			TIntArrayList ownedSites2 = context.state().owned().sites(player);
-			Set<Integer> ownedSet2 = new HashSet<>(ownedSites2.size());
-			for (int i = 0; i < ownedSites2.size(); i++) {
-				ownedSet2.add(ownedSites2.get(i));
-			}
-			ArrayList<Set<Integer>> id2 = new ArrayList<Set<Integer>>();
-			id2.add(ownedSet2);
-			HashSet<Integer> moveNumber2 = new HashSet<>();
-			moveNumber2.add(context.trial().moveNumber());
-			id2.add(moveNumber2);
+			ArrayList<Set<Integer>> id2 = createID(context);
 
-			if (realContext != null && ! (isCoherent(id2, idRealContext))){
+			if (idRealContext != null && ! (isCoherent(id2, idRealContext))){
 				propagateImpossible(current);
 				return null;
 			}
 			// create new node and return it
-			Edge newEdge = createEdge(move, current, id2, context, path);
+			Edge newEdge = new Edge(move, current, id2, context);
 			Node newNode = newEdge.succ;
 			path.push(newEdge);
 
@@ -368,8 +351,7 @@ public class UCD extends AI{
 		// check if the node is impossible (happens, despite the cleaning with propagateImpossible, for some reason)
 		if (current.exitingEdges.isEmpty()){
 			// No unexpanded moves normally
-			System.out.println("Impossible node weirdly not deleted");
-			// System.out.println("last touched by : " + current.lastTouched);
+			// System.out.println("Impossible node weirdly not deleted");
 			// if (!(current.enteringEdges.size()==1 && current.enteringEdges.get(0) == null)) {
 			// 	current.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
 			// 	current.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
@@ -415,6 +397,8 @@ public class UCD extends AI{
 
 		// We update the current context
 		currentContext.game().apply(currentContext, bestChild.move);
+		// Apply the pass move
+		currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
 
         return bestChild.succ;
 	}
@@ -433,16 +417,7 @@ public class UCD extends AI{
 		Move bestMove = null;
 
 		// Compute id of the context
-		TIntArrayList ownedSites = context.state().owned().sites(player);
-		Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
-		for (int i = 0; i < ownedSites.size(); i++) {
-			ownedSet.add(ownedSites.get(i));
-		}
-		ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
-		id.add(ownedSet);
-		HashSet<Integer> moveNumber = new HashSet<>();
-		moveNumber.add(context.trial().moveNumber());
-		id.add(moveNumber);
+		ArrayList<Set<Integer>> id = createID(context);
 
 		for (Edge edge : transpoTable.get(id).key().exitingEdges){
 			if (edge.succ.visitCount > maxn){
@@ -565,6 +540,20 @@ public class UCD extends AI{
 		return ;
 	}
 
+	private ArrayList<Set<Integer>> createID(Context context){
+		TIntArrayList ownedSites = context.state().owned().sites(player);
+		Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
+		for (int i = 0; i < ownedSites.size(); i++) {
+			ownedSet.add(ownedSites.get(i));
+		}
+		ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
+		id.add(ownedSet);
+		HashSet<Integer> moveNumber = new HashSet<>();
+		moveNumber.add(context.trial().moveNumber());
+		id.add(moveNumber);
+		return id;
+	}
+
 	@Override
 	public void initAI(final Game game, final int playerID)
 	{
@@ -629,18 +618,7 @@ public class UCD extends AI{
 				}
 			}
 
-			TIntArrayList ownedSites = context.state().owned().sites(player);
-			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
-			for (int i = 0; i < ownedSites.size(); i++) {
-				ownedSet.add(ownedSites.get(i));
-			}
-			ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
-			id.add(ownedSet);
-			HashSet<Integer> moveNumber = new HashSet<>();
-			moveNumber.add(context.trial().moveNumber());
-			id.add(moveNumber);
-
-			this.id = id;
+			this.id = createID(context);
 			
 			// For simplicity, we just take ALL legal moves. 
 			// This means we do not support simultaneous-move games.
@@ -732,16 +710,7 @@ public class UCD extends AI{
             pred.exitingEdges.add(this);
 
             // Create the successor node if doesn't exist yet and add it to the transposition table
-			TIntArrayList ownedSites = contextSucc.state().owned().sites(player);
-			Set<Integer> ownedSet = new HashSet<>(ownedSites.size());
-			for (int i = 0; i < ownedSites.size(); i++) {
-				ownedSet.add(ownedSites.get(i));
-			}
-			ArrayList<Set<Integer>> id = new ArrayList<Set<Integer>>();
-			id.add(ownedSet);
-			HashSet<Integer> moveNumber = new HashSet<>();
-			moveNumber.add(contextSucc.trial().moveNumber());
-			id.add(moveNumber);
+			ArrayList<Set<Integer>> id = createID(contextSucc);
 
 			if (transpoTable.containsKey(id)){
                 this.succ = transpoTable.get(id).key();
@@ -799,22 +768,6 @@ public class UCD extends AI{
             this.nd3 = 0;
         }
     }
-
-	public  Edge createEdge(final Move move, final Node pred, ArrayList<Set<Integer>> id, Context contextSucc, Stack<Edge> path){
-		Edge edge = new Edge(move, pred, id, contextSucc);
-
-		// If there is only one move (probably a pass), we directly create the pass edge to avoid problems
-		if (edge.succ.unexpandedMoves.size() == 1){
-			Context contextSucc2 = new Context(contextSucc);
-			contextSucc2.game().apply(contextSucc2, edge.succ.unexpandedMoves.get(0));
-			Edge passEdge = new Edge(edge.succ.unexpandedMoves.get(0), edge.succ, contextSucc2);
-			edge.succ.unexpandedMoves.clear();
-			path.push(edge);
-			return passEdge;
-		} else {
-			return edge;
-		}
-	}
 
 	//-------------------------------------------------------------------------
 
