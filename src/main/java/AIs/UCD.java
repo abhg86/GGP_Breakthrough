@@ -41,6 +41,7 @@ public class UCD extends AI{
 	/** The root node of the tree */
 	protected Node root = null;
 	protected Context startingContext = null;
+	protected Context currentContext = null;
 
 	/** The maximum depth of the tree */
 	protected int maxDepthReached = 0;
@@ -112,7 +113,7 @@ public class UCD extends AI{
 		{
 			// Start in root node
 			Node current = root;
-			Context currentContext = new Context(startingContext);
+			currentContext = new Context(startingContext);
 			Context realContext = new Context(startingContext);
 			ArrayList<Set<Integer>> realId = createID(startingContext);
 			if (realContexts.isEmpty()){
@@ -138,6 +139,7 @@ public class UCD extends AI{
 						realContext = new Context(realContext);
 						realContext.game().apply(realContext, realMoves.get(nbMoves*2));
 						// Apply the pass move
+						// Shouldn't be a tie here
 						realContext = new Context(realContext);
 						realContext.game().apply(realContext, realContext.moves(realContext).get(0));
 						realContexts.add(realContext);
@@ -147,14 +149,14 @@ public class UCD extends AI{
 
 					if (currentContext.state().mover() == player ){
 						// We're in a node corresponding to a move of the player that has already been played
-						current = select(current, realMoves.get(nbMoves*2), realId, path, currentContext);
+						current = select(current, realMoves.get(nbMoves*2), realId, path);
 					} else {
 						// We're in a node corresponding to a move of the opponent but before the current state of the game
-						current = select(current, null, realId, path, currentContext);
+						current = select(current, null, realId, path);
 					}
 				} else {
 					// We're in a node corresponding to after the current state of the game
-					current = select(current, null, null, path, currentContext);
+					current = select(current, null, null, path);
 				}
 				
 				if (current == null) {
@@ -174,7 +176,6 @@ public class UCD extends AI{
 					break;
 				}
 				nbMoves++;
-				System.out.println("current mover : " + currentContext);
 			}
 			
 			if (current != null){
@@ -228,7 +229,7 @@ public class UCD extends AI{
 	 * @param current
 	 * @return Selected node (if it has 0 visits, it will be a newly-expanded node).
 	 */
-	public Node select(final Node current, final Move realMove, ArrayList<Set<Integer>> idRealContext, Stack<Edge> path, Context currentContext)
+	public Node select(final Node current, final Move realMove, ArrayList<Set<Integer>> idRealContext, Stack<Edge> path)
 	{
 
 
@@ -275,8 +276,12 @@ public class UCD extends AI{
 				currentContext = new Context(currentContext);
 				currentContext.game().apply(currentContext, found.move);
 				// Apply the pass move
-				currentContext = new Context(currentContext);
-				currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
+				// In case of a tie there is no need to apply the pass move
+				if (! currentContext.trial().over()){
+					// Needs to recreate a context, else it crashes 
+					currentContext = new Context(currentContext);
+					currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
+				}
 
 				return found.succ;
 			}
@@ -284,9 +289,12 @@ public class UCD extends AI{
 			Context context = new Context(currentContext);
 			context.game().apply(context, realMove);
 			// Apply the pass move
-			context = new Context(context);
-			context.game().apply(context, context.moves(context).get(0));
-
+			// In case of a tie there is no need to apply the pass move
+			if (! context.trial().over()){
+				// Needs to recreate a context, else it crashes 
+				context = new Context(context);
+				context.game().apply(context, context.game().moves(context).moves().get(0));
+			}
 			id2 = createID(context);
 
 			if (isCoherent(idRealContext, id2)){
@@ -320,15 +328,14 @@ public class UCD extends AI{
 			Context context = new Context(currentContext);
 			
 			// apply the move
-			System.out.println("mover : " + context.state().mover());
 			context.game().apply(context, move);
 			// Apply the pass move
-			// Needs to recreate a context, else it crashes 
-			context = new Context(context);
-			System.out.println("mover : " + context.state().mover());
-			System.out.println("move : " + move);
-			System.out.println("move : " + context.game().moves(context).moves().get(0));
-			context.game().apply(context, context.game().moves(context).moves().get(0));
+			// In case of a tie there is no need to apply the pass move
+			if (! context.trial().over()){
+				// Needs to recreate a context, else it crashes 
+				context = new Context(context);
+				context.game().apply(context, context.game().moves(context).moves().get(0));
+			}
 
 			//Compute id of the new context
 			ArrayList<Set<Integer>> id2 = createID(context);
@@ -357,6 +364,8 @@ public class UCD extends AI{
 		if (current.exitingEdges.isEmpty()){
 			// No unexpanded moves normally
 			System.out.println("Impossible node weirdly not deleted");
+			System.out.println("id: " + current.id);
+			System.out.println("status: " + currentContext.trial().status());
 			// if (!(current.enteringEdges.size()==1 && current.enteringEdges.get(0) == null)) {
 			// 	current.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
 			// 	current.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
@@ -404,8 +413,12 @@ public class UCD extends AI{
 		currentContext = new Context(currentContext);
 		currentContext.game().apply(currentContext, bestChild.move);
 		// Apply the pass move
-		currentContext = new Context(currentContext);
-		currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
+		// In case of a tie there is no need to apply the pass move
+			if (! currentContext.trial().over()){
+				// Needs to recreate a context, else it crashes 
+				currentContext = new Context(currentContext);
+				currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
+			}
 
         return bestChild.succ;
 	}

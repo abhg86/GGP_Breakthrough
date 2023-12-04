@@ -142,6 +142,7 @@ public class HiddenUCT extends AI{
 					break;
 				}
 				nbMoves++;
+				System.out.println("current mover : " + current.context.state().mover());
 			}
 			
 			if (current != null) {
