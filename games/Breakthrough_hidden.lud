@@ -185,6 +185,17 @@
 
 
 
+(define "ReachWinHidden"
+    (if 
+        (and
+            (is In (arrayValue (array (intersection (sites Occupied by:#2) #1)) index:0) #1)
+            (not (is Next #2))
+        )
+        (result #2 Win)
+    )
+)
+
+
 
 //------------------------------------------------------------------------------
 
@@ -221,7 +232,7 @@
 
         
         (end {
-            ("ReachWin" (sites Mover) Mover)
+            ("ReachWinHidden" (sites Mover) Mover)
             (if (= (counter) 6) (result Mover Draw))
         }) 
     )
