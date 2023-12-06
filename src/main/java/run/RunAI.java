@@ -28,16 +28,16 @@ public class RunAI
 		for (int i=0; i<Integer.valueOf(args[0]); i++)
 		{
 			// Print memory available
-			Runtime runtime = Runtime.getRuntime();
-			long maxMemory = (runtime.maxMemory() / 1000000);
-			long allocatedMemory = (runtime.totalMemory() / 1000000);
-			long freeMemory = (runtime.freeMemory() / 1000000);
-			long usedMemory = allocatedMemory - freeMemory;
-			long availableMemory = maxMemory - usedMemory;
-			System.out.println("Max memory: " + maxMemory + " MB");
-			System.out.println("Available memory: " + availableMemory + " MB");
-			System.out.println("Allocated memory: " + allocatedMemory + " MB");
-			System.out.println("Free allocated memory: " + freeMemory + " MB");
+			// Runtime runtime = Runtime.getRuntime();
+			// long maxMemory = (runtime.maxMemory() / 1000000);
+			// long allocatedMemory = (runtime.totalMemory() / 1000000);
+			// long freeMemory = (runtime.freeMemory() / 1000000);
+			// long usedMemory = allocatedMemory - freeMemory;
+			// long availableMemory = maxMemory - usedMemory;
+			// System.out.println("Max memory: " + maxMemory + " MB");
+			// System.out.println("Available memory: " + availableMemory + " MB");
+			// System.out.println("Allocated memory: " + allocatedMemory + " MB");
+			// System.out.println("Free allocated memory: " + freeMemory + " MB");
 
 			Game game;
 			if (args[1].equals("normal")){
@@ -76,7 +76,8 @@ public class RunAI
 			// ais.add(new ExampleUCT());
 			ais.get(1).initAI(game, 1);
 
-			ais.add(new RandomAI());
+			// ais.add(new RandomAI());
+			ais.add(new HiddenUCT());
 			ais.get(2).initAI(game, 2);
 			
 			// This model object is the thing that will handle control flow for us

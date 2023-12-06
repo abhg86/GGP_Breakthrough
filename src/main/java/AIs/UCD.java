@@ -167,7 +167,13 @@ public class UCD extends AI{
 				if (currentContext.trial().over())
 				{
 					// We've reached a terminal state
+					current.containsTerminal = true;
 					break;
+				}
+
+				if (current.containsTerminal && current.unexpandedMoves.isEmpty() && current.exitingEdges.isEmpty()){
+					// Add the unexpanded moves that didn't exist when the game was over
+					current.unexpandedMoves.addAll(currentContext.game().moves(currentContext).moves());
 				}
 				
 				if (current.visitCount == 0)
@@ -209,7 +215,7 @@ public class UCD extends AI{
 			++numIterations;
 		}
 
-		System.out.println("number of iterations: " + numIterations);
+		// System.out.println("number of iterations: " + numIterations);
 		// Return the only available action if there is only one (for example for a pass)
 		if (context.game().moves(context).moves().size() == 1)
 			return context.game().moves(context).moves().get(0);
@@ -231,8 +237,6 @@ public class UCD extends AI{
 	 */
 	public Node select(final Node current, final Move realMove, ArrayList<Set<Integer>> idRealContext, Stack<Edge> path)
 	{
-
-
 		if (realMove != null){
 			// We're in a node corresponding to a move of the player that has already been played so we expand only toward this move
 			current.unexpandedMoves.clear();
@@ -362,15 +366,8 @@ public class UCD extends AI{
 
 		// check if the node is impossible (happens, despite the cleaning with propagateImpossible, for some reason)
 		if (current.exitingEdges.isEmpty()){
-			// No unexpanded moves normally
 			System.out.println("Impossible node weirdly not deleted");
-			System.out.println("id: " + current.id);
-			System.out.println("status: " + currentContext.trial().status());
-			// if (!(current.enteringEdges.size()==1 && current.enteringEdges.get(0) == null)) {
-			// 	current.enteringEdges.forEach( (edge) -> edge.pred.exitingEdges.remove(edge));
-			// 	current.enteringEdges.forEach( (edge) -> propagateImpossible(edge.pred));
-			// }
-			return null;
+			System.exit(1);
 		}
 
 		for (Edge child : current.exitingEdges){
@@ -438,6 +435,13 @@ public class UCD extends AI{
 
 		// Compute id of the context
 		ArrayList<Set<Integer>> id = createID(context);
+		if (!transpoTable.containsKey(id)){
+			System.out.println(id);
+			System.out.println("max depth reached: " + maxDepthReached);
+			System.out.println("Error: context not in transposition table");
+			FastArrayList<Move> moves = context.game().moves(context).moves();
+			return moves.get(ThreadLocalRandom.current().nextInt(moves.size()));
+		}
 
 		for (Edge edge : transpoTable.get(id).key().exitingEdges){
 			if (edge.succ.visitCount > maxn){
@@ -620,6 +624,9 @@ public class UCD extends AI{
 		/** List of moves for which we did not yet create a child node */
 		private final FastArrayList<Move> unexpandedMoves;
 
+		/** If the node contains a context where the trial is over */
+		private boolean containsTerminal = false;
+
 		
 		/**
 		 * Constructor
@@ -668,8 +675,10 @@ public class UCD extends AI{
 			// For simplicity, we just take ALL legal moves. 
 			// This means we do not support simultaneous-move games.
 			unexpandedMoves = new FastArrayList<Move>(context.game().moves(context).moves());
+			if (context.trial().over()){
+				containsTerminal = true;
+			}
 		}
-		
 	}
 
     /**

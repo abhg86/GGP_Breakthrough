@@ -142,7 +142,6 @@ public class HiddenUCT extends AI{
 					break;
 				}
 				nbMoves++;
-				System.out.println("current mover : " + current.context.state().mover());
 			}
 			
 			if (current != null) {
@@ -195,7 +194,6 @@ public class HiddenUCT extends AI{
 		long freeMemory = (runtime.freeMemory() / 1000000);
 		long usedMemory = allocatedMemory - freeMemory;
 		long availableMemory = maxMemory - usedMemory;
-		System.out.println("Available memory: " + availableMemory + " MB");
 
 		// Return the move we wish to play
 		Move chosenMove = finalMoveSelection(context);
