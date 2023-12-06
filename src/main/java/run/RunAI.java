@@ -8,6 +8,7 @@ import java.util.List;
 import game.Game;
 import AIs.ExampleUCT;
 import AIs.HiddenUCT;
+import AIs.NormalUCD;
 import AIs.RandomAI;
 import AIs.UCD;
 import other.AI;
@@ -71,7 +72,8 @@ public class RunAI
 			final List<AI> ais = new ArrayList<AI>(3);
 			ais.add(null);
 			// ais.add(MCTS.createBiasedMCTS(0.3));
-			ais.add(new UCD());
+			// ais.add(new UCD());
+			ais.add(new NormalUCD());
 			// ais.add(new HiddenUCT());
 			// ais.add(new ExampleUCT());
 			ais.get(1).initAI(game, 1);
