@@ -394,6 +394,8 @@ public class NormalUCD extends AI{
 
 		// Compute id of the context
 		ArrayList<Set<Integer>> id = createID(context);
+
+		// Check if the observation is in the transposition table
 		if (!transpoTable.containsKey(id)){
 			System.out.println(id);
 			System.out.println("max depth reached: " + maxDepthReached);
@@ -450,6 +452,8 @@ public class NormalUCD extends AI{
 
 	private void backPropagate(Stack<Edge> path, int d1, int d2, int d3, double[] results){
 		Edge leaf = path.peek();
+		Set<Edge> toClearDelta = new HashSet<Edge>();
+		toClearDelta.addAll(path);
 		Set<Edge> nextLayer = new HashSet<Edge>();
 		nextLayer.add(leaf);
 		int max = Math.max(d1, Math.max(d2, d3));
@@ -457,6 +461,8 @@ public class NormalUCD extends AI{
 			Set<Edge> edges = new HashSet<>(nextLayer);
 			nextLayer.clear();
 			for (Edge edge : edges){
+				toClearDelta.add(edge);
+
 				if (!(edge.pred.enteringEdges.size()==1 && edge.pred.enteringEdges.get(0) == null)) {
 					nextLayer.addAll(edge.pred.enteringEdges);
 				}
@@ -490,7 +496,13 @@ public class NormalUCD extends AI{
 			edge.nd3 ++;
 			updateMean(edge, max, results);
 			edge.n ++;
+			edge.succ.visitCount ++;
 		}
+
+		for (Edge edge : toClearDelta){
+			edge.deltaMean = new double[edge.scoreMean.length];
+		}
+
 		return ;
 	}
 	
