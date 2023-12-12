@@ -29,7 +29,7 @@ import other.trial.Trial;
  * @author Aymeric Behaegel
  */
 
-public class UCD extends AI{	
+public class UCDFail extends AI{	
 	//-------------------------------------------------------------------------
 	
 	/** Our player index */
@@ -38,15 +38,14 @@ public class UCD extends AI{
 	/** The root node of the tree */
 	protected Node root = null;
 	protected Context startingContext = null;
+	protected Context currentContext = null;
 
 	/** The maximum depth of the tree */
 	protected int maxDepthReached = 0;
 
-    /** The transposition table of existing nodes regrouped by similar observations from a player. 
-     * Use symbolic edges to represent the data of all edges combined. 
-	 * Have to use Arraylist for the key because pairs give different hashcode for the same content 
-     */
-	protected HashMap<ArrayList<Set<Integer>>, Node> transpoTable = new HashMap<ArrayList<Set<Integer>>, Node>();
+    /** The transposition table of existing nodes regrouped by similar observations from a player */
+	// Have to use Arraylist for the key because pairs give different hashcode for the same content
+	protected HashMap<ArrayList<Set<Integer>>, Pair<Node, ArrayList<Context>>> transpoTable = new HashMap<ArrayList<Set<Integer>>, Pair<Node, ArrayList<Context>>>();
 
 	int d1 = 2;
 	int d2 = 1;
@@ -56,7 +55,7 @@ public class UCD extends AI{
 	/**
 	 * Constructor
 	 */
-	public UCD()
+	public UCDFail()
 	{
 		this.friendlyName = "UCD";
 	}
@@ -78,11 +77,15 @@ public class UCD extends AI{
 			Trial trial = new Trial(context.game());
 			startingContext = new Context(context.game(), trial);
 			game.start(startingContext);
+			ArrayList<Context> contexts = new ArrayList<Context>();
+			contexts.add(startingContext);
 			
 			//Compute id of the root context
 			ArrayList<Set<Integer>> id = createID(startingContext);
 			
 			root = new Node(null, startingContext, id);
+
+			transpoTable.put(id, new Pair<>(root, contexts));
 		}
 		
 		// We'll respect any limitations on max seconds and max iterations (don't care about max depth)
@@ -107,6 +110,7 @@ public class UCD extends AI{
 		{
 			// Start in root node
 			Node current = root;
+			currentContext = new Context(startingContext);
 			Context realContext = new Context(startingContext);
 			ArrayList<Set<Integer>> realId = createID(startingContext);
 			if (realContexts.isEmpty()){
@@ -140,7 +144,7 @@ public class UCD extends AI{
 						realIds.add(realId);
 					}
 
-					if (current.context.state().mover() == player ){
+					if (currentContext.state().mover() == player ){
 						// We're in a node corresponding to a move of the player that has already been played
 						current = select(current, realMoves.get(nbMoves*2), realId, path);
 					} else {
@@ -157,10 +161,16 @@ public class UCD extends AI{
 					break;
 				}
 
-				if (current.context.trial().over())
+				if (currentContext.trial().over())
 				{
 					// We've reached a terminal state
+					current.containsTerminal = true;
 					break;
+				}
+
+				if (current.containsTerminal && current.unexpandedMoves.isEmpty() && current.exitingEdges.isEmpty()){
+					// Add the unexpanded moves that didn't registered as the node was created with a context where the game was over
+					current.unexpandedMoves.addAll(currentContext.game().moves(currentContext).moves());
 				}
 				
 				if (current.visitCount == 0)
@@ -172,7 +182,7 @@ public class UCD extends AI{
 			}
 			
 			if (current != null){
-				Context contextEnd = current.context;
+				Context contextEnd = currentContext;
 				
 				if (!contextEnd.trial().over())
 				{
@@ -214,10 +224,11 @@ public class UCD extends AI{
 	}
 	
 	/**
-	 * Selects child of the given current node according to UCB1 equation.
+	 * Selects child of the given "current" node according to UCB1 equation.
 	 * This method also implements the "Expansion" phase of MCTS, and creates
 	 * a new node if the given current node has unexpanded moves.
-
+	 * <p>
+	 * /!\ Update currentContext
 	 * 
 	 * @param current
 	 * @return Selected node (if it has 0 visits, it will be a newly-expanded node).
@@ -239,46 +250,58 @@ public class UCD extends AI{
 				Edge child = iterator.next();
 				if (child.move.equals(realMove)){
 					// We have the right move played so we return the corresponding child and delete the others, useless ones
-					if (isCoherent(child.succ.id, idRealContext)){
-						found = child;
-					} else {
+					if (!isCoherent(child.succ.id, idRealContext)){
 						currentImpossible = true;
+					} else {
+						found = child;
 					}
 					break;
 				}
 				// It's not the right move played so we remove it
 				iterator.remove();
 			}
-			
+
+			if (currentImpossible) {
+				System.out.println("real move impossible");
+				// delete the edge (enemy move) that led to this impossible context
+				path.peek().pred.exitingEdges.remove(path.peek());
+				// No need to propagate impossible as there are only this possible sequence of nodes for the path 
+				return null;
+			}
+
 			if (found != null) {
 				// We have the right move played so we return the corresponding child and delete the others, useless ones
 				current.exitingEdges.clear();
 				current.exitingEdges.add(found);
 				path.push(found);
 
+				// We update the current context
+				currentContext = new Context(currentContext);
+				currentContext.game().apply(currentContext, found.move);
+				// Apply the pass move
+				// In case of a tie there is no need to apply the pass move
+				if (! currentContext.trial().over()){
+					// Needs to recreate a context, else it crashes 
+					currentContext = new Context(currentContext);
+					currentContext.game().apply(currentContext, currentContext.moves(currentContext).get(0));
+				}
+
 				return found.succ;
 			}
 
-			if (currentImpossible) {
-				// unexpandedMoves is already empty
-				current.exitingEdges.clear();
-				propagateImpossible(current);
-				return null;
-			}
-
-			Context nextContext = new Context(current.context);
-			nextContext.game().apply(nextContext, realMove);
+			Context context = new Context(currentContext);
+			context.game().apply(context, realMove);
 			// Apply the pass move
 			// In case of a tie there is no need to apply the pass move
-			if (! nextContext.trial().over()){
+			if (! context.trial().over()){
 				// Needs to recreate a context, else it crashes 
-				nextContext = new Context(nextContext);
-				nextContext.game().apply(nextContext, nextContext.game().moves(nextContext).moves().get(0));
+				context = new Context(context);
+				context.game().apply(context, context.game().moves(context).moves().get(0));
 			}
-			id2 = createID(nextContext);
+			id2 = createID(context);
 
 			if (isCoherent(idRealContext, id2)){
-				Edge newEdge = new Edge(realMove, current, id2, nextContext);
+				Edge newEdge = new Edge(realMove, current, id2, context);
 				Node newNode = newEdge.succ;
 				// We don't want to stop here so we add 1 to the visitCount
 				newNode.visitCount = 1;
@@ -618,9 +641,6 @@ public class UCD extends AI{
 		/** The id of the observation of this Node for the transposition table */
 		private ArrayList<Set<Integer>> id;
 
-		/** Context of the Node */
-		private Context context;
-
 		/** Visit count for this node */
 		private int visitCount = 0;
 
@@ -630,6 +650,33 @@ public class UCD extends AI{
 		/** List of moves for which we did not yet create a child node */
 		private final FastArrayList<Move> unexpandedMoves;
 
+		/** If the node contains a context where the trial is over */
+		private boolean containsTerminal = false;
+
+		
+		/**
+		 * Constructor
+		 * 
+		 * @param parent
+		 * @param moveFromParent
+		 * @param context
+		 */
+		public Node(final Edge edge, final Context context)
+		{
+			this.enteringEdges.add(edge);
+			if (edge != null){
+				depth = edge.pred.depth + 1;
+				if (depth > maxDepthReached){
+					maxDepthReached = depth;
+				}
+			}
+
+			this.id = createID(context);
+			
+			// For simplicity, we just take ALL legal moves. 
+			// This means we do not support simultaneous-move games.
+			unexpandedMoves = new FastArrayList<Move>(context.game().moves(context).moves());
+		}
 
 		/**
 		 * Constructor
@@ -650,18 +697,13 @@ public class UCD extends AI{
 			}
 
 			this.id = id;
-
-			if (transpoTable.containsKey(id)){
-				transpoTable.get(id).enteringEdges.add(edge);
-			} else {
-				transpoTable.put(id, new Node(edge, context, id));
-			}
-
+			
 			// For simplicity, we just take ALL legal moves. 
 			// This means we do not support simultaneous-move games.
 			unexpandedMoves = new FastArrayList<Move>(context.game().moves(context).moves());
-			
-			this.context = context;
+			if (context.trial().over()){
+				containsTerminal = true;
+			}
 		}
 	}
 
@@ -701,6 +743,45 @@ public class UCD extends AI{
 		/** Visit count extended for this edge */
         private int nd3 = 0;
         
+        /**
+         * Constructor
+         * 
+         * @param move
+         * @param pred
+         * @param contextSucc
+         */
+        public Edge(final Move move, final Node pred, Context contextSucc)
+        {
+            this.move = move;
+            this.pred = pred;
+
+			// Set n_prime for the pred node (i.e. all entering edges) if it is the first time we create a child
+			if (pred.exitingEdges.isEmpty() && !(pred.enteringEdges.size()==1 && pred.enteringEdges.get(0) == null)){
+				for (Edge edge : pred.enteringEdges){
+					edge.n_prime = edge.n;
+				}
+			}
+
+            pred.exitingEdges.add(this);
+
+            // Create the successor node if doesn't exist yet and add it to the transposition table
+			ArrayList<Set<Integer>> id = createID(contextSucc);
+
+			if (transpoTable.containsKey(id)){
+                this.succ = transpoTable.get(id).key();
+                transpoTable.get(id).value().add(contextSucc);
+            } else {
+                this.succ = new Node(this, contextSucc, id);
+                ArrayList<Context> contexts = new ArrayList<Context>();
+                contexts.add(contextSucc);
+                transpoTable.put(id, new Pair<Node,ArrayList<Context>>(this.succ, contexts));
+            }
+
+            this.scoreMean = new double[contextSucc.game().players().count() + 1];
+			this.deltaMean = new double[contextSucc.game().players().count() + 1];
+            this.nd2 = 0;
+            this.nd3 = 0;
+        }
 
 		/**
          * Constructor
@@ -725,9 +806,16 @@ public class UCD extends AI{
 
             pred.exitingEdges.add(this);
 
-            this.succ = new Node(this, contextSucc, id);
-
-			transpoTable.get(pred.id).exitingEdges.add(this);
+            // Create the successor node if doesn't exist yet and add it to the transposition table
+			if (transpoTable.containsKey(id)){
+                this.succ = transpoTable.get(id).key();
+                transpoTable.get(id).value().add(contextSucc);
+            } else {
+                this.succ = new Node(this, contextSucc, id);
+                ArrayList<Context> contexts = new ArrayList<Context>();
+                contexts.add(contextSucc);
+                transpoTable.put(id, new Pair<Node,ArrayList<Context>>(this.succ, contexts));
+            }
 
             this.scoreMean = new double[contextSucc.game().players().count() + 1];
 			this.deltaMean = new double[contextSucc.game().players().count() + 1];
