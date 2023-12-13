@@ -252,8 +252,10 @@ public class UCD extends AI{
 			
 			if (found != null) {
 				// We have the right move played so we return the corresponding child and delete the others, useless ones
+				transpoTable.get(current.id).exitingEdges.removeAll(current.exitingEdges);
 				current.exitingEdges.clear();
 				current.exitingEdges.add(found);
+				transpoTable.get(current.id).exitingEdges.add(found);
 				path.push(found);
 
 				return found.succ;
@@ -261,6 +263,7 @@ public class UCD extends AI{
 
 			if (currentImpossible) {
 				// unexpandedMoves is already empty
+				transpoTable.get(current.id).exitingEdges.removeAll(current.exitingEdges);
 				current.exitingEdges.clear();
 				propagateImpossible(current);
 				return null;
@@ -287,16 +290,16 @@ public class UCD extends AI{
 				newEdge.n ++;
 				path.push(newEdge);
 
-				// We update the current context
-				currentContext = context;
+				transpoTable.get(current.id).exitingEdges.add(newEdge);
 
 				return newNode;
 			}
 			else {
 				System.out.println("real move not yet done impossible");
-				// delete the edge (enemy move) that led to this impossible context
-				path.peek().pred.exitingEdges.remove(path.peek());
-				// No need to propagate impossible as there are only this possible sequence of nodes for the path
+				// unexpandedMoves is already empty
+				transpoTable.get(current.id).exitingEdges.removeAll(current.exitingEdges);
+				current.exitingEdges.clear();
+				propagateImpossible(current);
 				return null;
 			}
 		}
@@ -307,7 +310,7 @@ public class UCD extends AI{
 			final Move move = current.unexpandedMoves.remove(ThreadLocalRandom.current().nextInt(current.unexpandedMoves.size()));
 			
 			// create a copy of context
-			Context context = new Context(currentContext);
+			Context context = new Context(current.context);
 			
 			// apply the move
 			context.game().apply(context, move);
@@ -329,11 +332,9 @@ public class UCD extends AI{
 			}
 			// create new node and return it
 			Edge newEdge = new Edge(move, current, id2, context);
+			transpoTable.get(current.id).exitingEdges.add(newEdge);
 			Node newNode = newEdge.succ;
 			path.push(newEdge);
-
-			// We update the current context
-			currentContext = context;
 
 			return newNode;
 		}
@@ -346,23 +347,41 @@ public class UCD extends AI{
 		// check if the node is impossible (happens, despite the cleaning with propagateImpossible, for some reason)
 		if (current.exitingEdges.isEmpty()){
 			System.out.println("Impossible node weirdly not deleted");
-			System.out.println("depth : " + current.depth);
-			System.out.println("context : " + currentContext.state());
 			System.exit(1);
 		}
 
-		for (Edge child : current.exitingEdges){
+		Node combinedNode = transpoTable.get(current.id);
+
+		for (Edge child : combinedNode.exitingEdges){
 			pd2 += child.nd2;
 		}
         final double twoParentLog = 2.0 * Math.log(Math.max(1, pd2));
         int numBestFound = 0;
         
-        final int numChildren = current.exitingEdges.size();
-        final int mover = currentContext.state().mover();
+        final int numChildren = combinedNode.exitingEdges.size();
+        final int mover = current.context.state().mover();
+
+		final HashMap<Move, double[]> scoreMeans = new HashMap<>();
+		HashMap<Move, Integer> scorend3s = new HashMap<>();
+
+		for (Edge e : combinedNode.exitingEdges){
+			if (!scoreMeans.containsKey(e.move)){
+				scoreMeans.put(e.move, e.scoreSum);
+				scorend3s.put(e.move, e.nd3);
+			}
+			else {
+				double [] scoreMeanSum = scoreMeans.get(e.move);
+				for (int i=0; i<scoreMeanSum.length; i++){
+					scoreMeanSum[i] = scoreMeanSum[i] +  e.scoreSum[i];
+				}
+				scoreMeans.put(e.move, scoreMeanSum);
+				scorend3s.put(e.move, scorend3s.get(e.move) + e.nd3);
+			}
+		}
 
         for (int i = 0; i < numChildren; ++i) 
         {
-        	final Edge child = current.exitingEdges.get(i);
+        	final Edge child = combinedNode.exitingEdges.get(i);
         	final double exploit = child.scoreMean[mover];
         	final double explore = Math.sqrt(twoParentLog / child.nd3);
         
@@ -686,6 +705,9 @@ public class UCD extends AI{
 		/** For every player, mean of utilities / scores backpropagated through this node */
 		private double[] scoreMean;
 
+		/** For every player, sum of utilities / scores backpropagated through this node */
+		private double[] scoreSum;
+
 		/** Variation of scoreMean; used for updating scoreMean */
 		private double[] deltaMean;
 
@@ -731,6 +753,7 @@ public class UCD extends AI{
 
             this.scoreMean = new double[contextSucc.game().players().count() + 1];
 			this.deltaMean = new double[contextSucc.game().players().count() + 1];
+			this.scoreSum = new double[contextSucc.game().players().count() + 1];
             this.nd2 = 0;
             this.nd3 = 0;
         }
