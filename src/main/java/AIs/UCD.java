@@ -80,7 +80,8 @@ public class UCD extends AI{
 			
 			//Compute id of the root context
 			ArrayList<Set<Integer>> id = createID(startingContext);
-			
+			DAGNode DAGroot = new DAGNode(null, id);
+			transpoTable.put(id, DAGroot);
 			root = new Node(null, startingContext, id);
 		}
 		
@@ -162,7 +163,7 @@ public class UCD extends AI{
 					break;
 				}
 				
-				if (current.visitCount == 0)
+				if (current.equivalentNode.visitCount == 0)
 				{
 					// We've expanded a new node, time for playout!
 					break;
@@ -203,6 +204,7 @@ public class UCD extends AI{
 
 		System.out.println("number of iterations: " + numIterations);
 		System.out.println("nb moves played: " + (realMoves.size() + 1)/2);
+		System.out.println("max depth reached: " + maxDepthReached);
 		// Return the only available action if there is only one (for example for a pass)
 		if (context.game().moves(context).moves().size() == 1)
 			return context.game().moves(context).moves().get(0);
@@ -251,10 +253,10 @@ public class UCD extends AI{
 			
 			if (found != null) {
 				// We have the right move played so we return the corresponding child and delete the others, useless ones
-				transpoTable.get(current.id).exitingEdges.clear();
+				current.equivalentNode.exitingEdges.clear();
 				current.exitingEdges.clear();
 				current.exitingEdges.add(found);
-				transpoTable.get(current.id).exitingEdges.put(found.move, found.equivalentEdge);
+				current.equivalentNode.exitingEdges.put(found.move, found.equivalentEdge);
 				path.push(found.equivalentEdge);
 
 				return found.succ;
@@ -357,6 +359,8 @@ public class UCD extends AI{
         
         final int mover = current.context.state().mover();
 
+		System.out.println("equivalentEdges: " + equivalentEdges.size());
+		System.out.println("depth: " + current.depth);
         for (DAGEdge child : equivalentEdges) 
         {
         	final double exploit = child.scoreMean[mover];
@@ -364,6 +368,7 @@ public class UCD extends AI{
         
             final double ucb1Value = exploit + explore;
 
+			System.out.println(child + " : " + child.scoreMean[mover]);
             if (ucb1Value > bestValue)
             {
                 bestValue = ucb1Value;
@@ -529,7 +534,7 @@ public class UCD extends AI{
 		for (int j=0; j<edge.deltaMean.length; j++){
 			if (i==0){
 				// nd3 has already been incremented
-				double value = (edge.scoreMean[j] * (edge.nd3 - 1) + results[j]) / edge.nd3;
+				double value = (edge.scoreMean[j] * (edge.nd3 - 1) + results[j]) / (edge.nd3 + edge.n_prime);
 				edge.deltaMean[j] = value - edge.scoreMean[j];
 				edge.scoreMean[j] = value;
 			}
@@ -672,20 +677,18 @@ public class UCD extends AI{
 		/**
 		 * Constructor
 		 * 
-		 * @param parent
-		 * @param moveFromParent
-		 * @param context
-		 * @param id
+		 * @param edge
 		 */
-		public DAGNode(final Edge edge)
+		public DAGNode(final DAGEdge edge, ArrayList<Set<Integer>> id)
 		{
 			if (edge != null){
-				this.enteringEdges.put(edge.move, edge.equivalentEdge);
+				this.enteringEdges.put(edge.move, edge);
 				depth = edge.pred.depth + 1;
 				if (depth > maxDepthReached){
 					maxDepthReached = depth;
 				}
 			}
+			transpoTable.put(id, this);
 		}
 	}
 
@@ -727,8 +730,8 @@ public class UCD extends AI{
 			if (pred.equivalentNode.exitingEdges.containsKey(move)){
 				equivalentEdge = pred.equivalentNode.exitingEdges.get(move);
 			} else {
-				equivalentEdge = new DAGEdge(move, pred, id);
-				transpoTable.get(pred.id).exitingEdges.put(move, equivalentEdge);
+				equivalentEdge = new DAGEdge(move, pred.equivalentNode, id);
+				pred.equivalentNode.exitingEdges.put(move, equivalentEdge);
 			};
 
 			// Create the node at the end of the edge after creating the DAG edge else the DAG node is not created yet
@@ -775,15 +778,15 @@ public class UCD extends AI{
 
 		/** Constructor for copying an edge into the DAG
 		 * 
-		 * @param edge
+		 * @param move
 		 */
 		public DAGEdge(Move move, DAGNode pred, ArrayList<Set<Integer>> id){
 			this.move = move;
-			this.pred = transpoTable.get(pred.id);
+			this.pred = pred;
 			if (transpoTable.containsKey(id)){
-				this.succ = transpoTable.get(edge.succ.id);
+				this.succ = transpoTable.get(id);
 			} else {
-				this.succ = new DAGNode(edge);
+				this.succ = new DAGNode(this, id);
 			}
 			// Set n_prime for the pred node (i.e. all entering edges) if it is the first time we create a child
 			if (pred.exitingEdges.isEmpty() && !(pred.enteringEdges.isEmpty())){
@@ -792,8 +795,8 @@ public class UCD extends AI{
 				}
 			}
 
-			this.scoreMean = new double[edge.pred.context.game().players().count() + 1];
-			this.deltaMean = new double[edge.pred.context.game().players().count() + 1];
+			this.scoreMean = new double[startingContext.game().players().count() + 1];
+			this.deltaMean = new double[startingContext.game().players().count() + 1];
             this.nd2 = 0;
             this.nd3 = 0;
 		}
