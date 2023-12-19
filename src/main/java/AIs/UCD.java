@@ -285,7 +285,6 @@ public class UCD extends AI{
 				Edge newEdge = new Edge(realMove, current, id2, nextContext);
 				Node newNode = newEdge.succ;
 				// We don't want to stop here so we add 1 to the visitCount
-				newNode.visitCount = 1;
 				newEdge.equivalentEdge.nd2 ++;
 				newEdge.equivalentEdge.nd3 ++;
 				newEdge.equivalentEdge.n ++;
@@ -359,16 +358,19 @@ public class UCD extends AI{
         
         final int mover = current.context.state().mover();
 
-		System.out.println("equivalentEdges: " + equivalentEdges.size());
-		System.out.println("depth: " + current.depth);
+		ArrayList<Double> ucb1values = new ArrayList<>();
+		ArrayList<Double> exploitValues = new ArrayList<>();
+		ArrayList<Double> exploreValues = new ArrayList<>();
         for (DAGEdge child : equivalentEdges) 
         {
         	final double exploit = child.scoreMean[mover];
         	final double explore = Math.sqrt(twoParentLog / child.nd3);
         
             final double ucb1Value = exploit + explore;
+			ucb1values.add(ucb1Value);
+			exploitValues.add(exploit);
+			exploreValues.add(explore);
 
-			System.out.println(child + " : " + child.scoreMean[mover]);
             if (ucb1Value > bestValue)
             {
                 bestValue = ucb1Value;
@@ -388,8 +390,16 @@ public class UCD extends AI{
         
 		path.push(bestChild);
 
+		Edge result = null;
 		// should stay in the same order so give the equivalent edge
-		Edge result = current.exitingEdges.get(equivalentEdges.indexOf(bestChild));
+		try {
+			result = current.exitingEdges.get(equivalentEdges.indexOf(bestChild));
+		} catch (Exception e){
+			System.out.println("UCB1values: " + ucb1values);
+			System.out.println("exploitValues: " + exploitValues);
+			System.out.println("exploreValues: " + exploreValues);
+			System.out.println("equivalentEdges: " + equivalentEdges);
+		}
 
         return result.succ;
 	}
@@ -455,7 +465,7 @@ public class UCD extends AI{
 			if (parent.enteringEdge != null) {
 				parent.enteringEdge.pred.exitingEdges.remove(parent.enteringEdge);
 				propagateImpossible(parent.enteringEdge.pred);
-				// parent.enteringEdges.clear();
+				parent.enteringEdge = null;
 			}
 		}
 		return;
@@ -483,7 +493,7 @@ public class UCD extends AI{
 				}
 
 				// No need to update twice
-				if (edge == path.peek()){
+				if (!path.isEmpty() && edge == path.peek()){
 					path.pop();
 					edge.nd2 ++;
 					edge.nd3 ++;
@@ -531,12 +541,22 @@ public class UCD extends AI{
 	 * @param results
 	 */
 	private void updateMean(DAGEdge edge, int i, double[] results){
-		for (int j=0; j<edge.deltaMean.length; j++){
+		// Skip player 0 because it's not a player
+		for (int j=1; j<edge.deltaMean.length; j++){
 			if (i==0){
 				// nd3 has already been incremented
 				double value = (edge.scoreMean[j] * (edge.nd3 - 1) + results[j]) / (edge.nd3 + edge.n_prime);
 				edge.deltaMean[j] = value - edge.scoreMean[j];
 				edge.scoreMean[j] = value;
+				if (Double.isNaN(value)){
+					System.out.println("value is NaN");
+					System.out.println("edge.scoreMean[j]: " + edge.scoreMean[j]);
+					System.out.println("edge.nd3: " + edge.nd3);
+					System.out.println("edge.n_prime: " + edge.n_prime);
+					System.out.println("results[j]: " + results[j]);
+					System.out.println("edge.deltaMean[j]: " + edge.deltaMean[j]);
+					System.exit(1);
+				}
 			}
 			else {
 				int n_tot = 0;
@@ -545,8 +565,22 @@ public class UCD extends AI{
 					edge.deltaMean[j] += child_edge.deltaMean[j] * child_edge.n;
 					n_tot += child_edge.n;
 				}
+				System.out.println("j: " + j);
+				System.out.println("results[j]: " + results[j]);
 				edge.deltaMean[j] /= n_tot + edge.n_prime;
 				edge.scoreMean[j] += edge.deltaMean[j];
+				if (Double.isNaN(edge.scoreMean[j])){
+					System.out.println("value is NaN 2");
+					System.out.println("i: " + i);
+					System.out.println("edge.scoreMean[j]: " + edge.scoreMean[j]);
+					System.out.println("edge.nd3: " + edge.nd3);
+					System.out.println("edge.n_prime: " + edge.n_prime);
+					System.out.println("ntot: " + n_tot);
+					System.out.println("edge.deltaMean[j]: " + edge.deltaMean[j]);
+					System.out.println("edge.succ.exitingEdges: " + edge.succ.exitingEdges);
+					System.out.println("depth: " + edge.succ.depth);
+					System.exit(1);
+				}
 			}
 		}
 		return ;
@@ -595,7 +629,7 @@ public class UCD extends AI{
 	private class Node
 	{
         /** Entering edges **/
-        private final Edge enteringEdge;
+        private Edge enteringEdge;
 
 		/** Exiting Edges */
 		private final List<Edge> exitingEdges = new ArrayList<Edge>();
@@ -605,9 +639,6 @@ public class UCD extends AI{
 
 		/** Context of the Node */
 		private Context context;
-
-		/** Visit count for this node */
-		private int visitCount = 0;
 
 		/** Depth of the node in the tree */
 		private int depth = 0;
@@ -727,11 +758,10 @@ public class UCD extends AI{
 
             pred.exitingEdges.add(this);
 
-			if (pred.equivalentNode.exitingEdges.containsKey(move)){
+			if (transpoTable.containsKey(id) && transpoTable.get(id).enteringEdges.containsKey(move) && transpoTable.get(id).enteringEdges.get(move).pred == pred.equivalentNode){
 				equivalentEdge = pred.equivalentNode.exitingEdges.get(move);
 			} else {
 				equivalentEdge = new DAGEdge(move, pred.equivalentNode, id);
-				pred.equivalentNode.exitingEdges.put(move, equivalentEdge);
 			};
 
 			// Create the node at the end of the edge after creating the DAG edge else the DAG node is not created yet
@@ -785,6 +815,7 @@ public class UCD extends AI{
 			this.pred = pred;
 			if (transpoTable.containsKey(id)){
 				this.succ = transpoTable.get(id);
+				this.succ.enteringEdges.put(move, this);
 			} else {
 				this.succ = new DAGNode(this, id);
 			}
@@ -795,10 +826,13 @@ public class UCD extends AI{
 				}
 			}
 
+			pred.exitingEdges.put(move, this);
+
 			this.scoreMean = new double[startingContext.game().players().count() + 1];
 			this.deltaMean = new double[startingContext.game().players().count() + 1];
             this.nd2 = 0;
             this.nd3 = 0;
+			this.n = 0;
 		}
 		
     }
