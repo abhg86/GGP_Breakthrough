@@ -120,7 +120,7 @@ public class UCD extends AI{
 			// Traverse tree
 			while (true)
 			{
-				if (nbMoves < (realMoves.size() + 1)/2){
+				if (nbMoves < realMoves.size()){
 					// We're in a node corresponding to a move of the player that has already been played
 					if (nbMoves < realContexts.size() -1){
 						// We get the situation from the equivalent time for the real game if already computed
@@ -130,11 +130,7 @@ public class UCD extends AI{
 					else {
 						// We compute it otherwise
 						realContext = new Context(realContext);
-						realContext.game().apply(realContext, realMoves.get(nbMoves*2));
-						// Apply the pass move
-						// Shouldn't be a tie here
-						realContext = new Context(realContext);
-						realContext.game().apply(realContext, realContext.moves(realContext).get(0));
+						realContext.game().apply(realContext, realMoves.get(nbMoves));
 						realContexts.add(realContext);
 						realId = createID(realContext);
 						realIds.add(realId);
@@ -142,7 +138,7 @@ public class UCD extends AI{
 
 					if (current.context.state().mover() == player ){
 						// We're in a node corresponding to a move of the player that has already been played
-						current = select(current, realMoves.get(nbMoves*2), realId, path);
+						current = select(current, realMoves.get(nbMoves), realId, path);
 					} else {
 						// We're in a node corresponding to a move of the opponent but before the current state of the game
 						current = select(current, null, realId, path);
@@ -203,7 +199,7 @@ public class UCD extends AI{
 		}
 
 		System.out.println("number of iterations: " + numIterations);
-		System.out.println("nb moves played: " + (realMoves.size() + 1)/2);
+		System.out.println("nb moves played: " + realMoves.size());
 		System.out.println("max depth reached: " + maxDepthReached);
 		// Return the only available action if there is only one (for example for a pass)
 		if (context.game().moves(context).moves().size() == 1)
@@ -256,7 +252,11 @@ public class UCD extends AI{
 				current.equivalentNode.exitingEdges.clear();
 				current.exitingEdges.clear();
 				current.exitingEdges.add(found);
-				current.equivalentNode.exitingEdges.put(found.move, found.equivalentEdge);
+				DAGEdge a = current.equivalentNode.exitingEdges.put(found.move, found.equivalentEdge);
+				if (a != null){
+					System.out.println("a: " + a);
+					System.exit(1);
+				}
 				path.push(found.equivalentEdge);
 
 				return found.succ;
@@ -272,13 +272,6 @@ public class UCD extends AI{
 
 			Context nextContext = new Context(current.context);
 			nextContext.game().apply(nextContext, realMove);
-			// Apply the pass move
-			// In case of a tie there is no need to apply the pass move
-			if (! nextContext.trial().over()){
-				// Needs to recreate a context, else it crashes 
-				nextContext = new Context(nextContext);
-				nextContext.game().apply(nextContext, nextContext.game().moves(nextContext).moves().get(0));
-			}
 			id2 = createID(nextContext);
 
 			if (isCoherent(idRealContext, id2)){
@@ -311,13 +304,6 @@ public class UCD extends AI{
 			
 			// apply the move
 			context.game().apply(context, move);
-			// Apply the pass move
-			// In case of a tie there is no need to apply the pass move
-			if (! context.trial().over()){
-				// Needs to recreate a context, else it crashes 
-				context = new Context(context);
-				context.game().apply(context, context.game().moves(context).moves().get(0));
-			}
 
 			//Compute id of the new context
 			ArrayList<Set<Integer>> id2 = createID(context);
@@ -758,9 +744,17 @@ public class UCD extends AI{
 
             pred.exitingEdges.add(this);
 
-			if (transpoTable.containsKey(id) && transpoTable.get(id).enteringEdges.containsKey(move) && transpoTable.get(id).enteringEdges.get(move).pred == pred.equivalentNode){
+			if (transpoTable.containsKey(id) && transpoTable.get(id).enteringEdges.containsKey(move) && transpoTable.get(id).enteringEdges.get(move).pred.equals(pred.equivalentNode)){
+				System.out.println("isOK");
 				equivalentEdge = pred.equivalentNode.exitingEdges.get(move);
 			} else {
+				System.out.println("transpotable.containsKey(id): " + transpoTable.containsKey(id));
+				if (transpoTable.containsKey(id)){
+					System.out.println("transpotable.get(id).enteringEdges.containsKey(move): " + transpoTable.get(id).enteringEdges.containsKey(move));
+					if (transpoTable.get(id).enteringEdges.containsKey(move)){
+						System.out.println("transpotable.get(id).enteringEdges.get(move).pred == pred.equivalentNode: " + (transpoTable.get(id).enteringEdges.get(move).pred.equals(pred.equivalentNode)));
+					}
+				}
 				equivalentEdge = new DAGEdge(move, pred.equivalentNode, id);
 			};
 
@@ -826,8 +820,16 @@ public class UCD extends AI{
 				}
 			}
 
-			pred.exitingEdges.put(move, this);
-
+			DAGEdge a = pred.exitingEdges.put(move, this);
+			if (a != null){
+				System.out.println("a move: " + a.move);
+				System.out.println("move: " + move);
+				System.out.println("a.succ: " + a.succ.enteringEdges);
+				System.out.println("succ: " + succ.enteringEdges);
+				System.out.println("a.pred: " + a.pred);
+				System.out.println("pred: " + pred);
+				System.exit(1);
+			}
 			this.scoreMean = new double[startingContext.game().players().count() + 1];
 			this.deltaMean = new double[startingContext.game().players().count() + 1];
             this.nd2 = 0;
