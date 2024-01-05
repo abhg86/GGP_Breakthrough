@@ -26,7 +26,7 @@ import other.trial.Trial;
  * @author Aymeric Behaegel
  */
 
-public class HiddenUCT extends AI{	
+public class NMovesPriorHiddenUCT extends AI{	
 	//-------------------------------------------------------------------------
 	
 	/** Our player index */
@@ -35,15 +35,18 @@ public class HiddenUCT extends AI{
 	/** The layer of the tree that comes after the current state of the game*/
 	protected Set<Node> followingLayer = new HashSet<>();
 
-	/** The root node of the tree */
+	/** The actual root node of the tree */
 	protected Node root = null;
+
+    /** The number of move played in the past unknown to the player */
+    protected int nMovesPrior = 6;
 	
 	//-------------------------------------------------------------------------
 	
 	/**
 	 * Constructor
 	 */
-	public HiddenUCT()
+	public NMovesPriorHiddenUCT()
 	{
 		this.friendlyName = "Hidden UCT";
 	}
@@ -60,25 +63,41 @@ public class HiddenUCT extends AI{
 		final int maxDepth
 	)
 	{
-		// Start out by creating a new root node if it doesn't exist yet
+        // Moves played before the current state of the game
+		List<Move> realMoves = context.trial().generateRealMovesList();
+		
+		List<Context> realContexts = new ArrayList<Context>();
+		followingLayer.clear();
+
+        System.out.println("Number of moves played before the current state of the game: " + realMoves.size());
+        System.out.println("Number of contexts before the current state of the game: " + realContexts.size());
+        System.out.println("Number of moves played before the current state of the game: " + context.trial().moveNumber());
+		// Start out by creating a new root node if it doesn't exist yet or updating it if needed
 		if (root == null){
 			Trial trial = new Trial(context.game());
 			Context startingContext = new Context(context.game(), trial);
 			game.start(startingContext);
 			root = new Node(null, null, startingContext);
-		}
+		} else if (context.trial().moveNumber() > nMovesPrior){
+            // We set the root to a past at distance nMovesPrior
+            // The root is supposed to only be at one or three move in the past depending on if it is a pass move or not
+            if (context.trial().moveNumber() % 2 == 0){
+                // We are at a normal move
+                System.out.println("Update root at a normal move");
+                root = goTo(root, realMoves.get(root.context.trial().moveNumber()));
+                root = goTo(root, realMoves.get(root.context.trial().moveNumber()));
+            } else {
+                // We are at a pass move
+                System.out.println("Update root at a pass move");
+                root = goTo(root, realMoves.get(root.context.trial().moveNumber()));
+            }
+        } 
 		
 		// We'll respect any limitations on max seconds and max iterations (don't care about max depth)
 		final long stopTime = (maxSeconds > 0.0) ? System.currentTimeMillis() + (long) (maxSeconds * 1000L) : Long.MAX_VALUE;
 		final int maxIts = (maxIterations >= 0) ? maxIterations : Integer.MAX_VALUE;
 		
 		int numIterations = 0;
-
-		// Moves played before the current state of the game
-		List<Move> realMoves = context.trial().generateRealMovesList();
-		
-		List<Context> realContexts = new ArrayList<Context>();
-		followingLayer.clear();
 		
 		// Our main loop through MCTS iterations
 		while 
@@ -195,7 +214,7 @@ public class HiddenUCT extends AI{
 		long usedMemory = allocatedMemory - freeMemory;
 		long availableMemory = maxMemory - usedMemory;
 
-		System.out.println("Number of iterations HiddenUCT: " + numIterations);
+		System.out.println("Number of iterations NMovesPrior: " + numIterations);
 		// Return the move we wish to play
 		Move chosenMove = finalMoveSelection(context);
 		return chosenMove;
@@ -398,6 +417,27 @@ public class HiddenUCT extends AI{
 	public void reset(){
 		root = null;
 	}
+
+    public Node goTo(Node current, Move move){
+        current.unexpandedMoves.clear();
+
+        // If the node has already been explored, no need to create a new node
+        for (java.util.Iterator<Node> iterator = current.children.iterator();  iterator.hasNext(); ) {
+            // Iterator and breaks because of concurrentModificationException
+            Node child =  iterator.next();
+            if (child.moveFromParent.equals(move)){
+                return child;
+            }
+            // It's not the right move played so we remove it
+            iterator.remove();
+        }
+
+
+        final Context context = new Context(current.context);
+        context.game().apply(context, move);
+        Node newNode = new Node(current, move, context);
+        return newNode;
+    }
 	
 	//-------------------------------------------------------------------------
 	
