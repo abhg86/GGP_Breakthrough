@@ -69,9 +69,6 @@ public class NMovesPriorHiddenUCT extends AI{
 		List<Context> realContexts = new ArrayList<Context>();
 		followingLayer.clear();
 
-        System.out.println("Number of moves played before the current state of the game: " + realMoves.size());
-        System.out.println("Number of contexts before the current state of the game: " + realContexts.size());
-        System.out.println("Number of moves played before the current state of the game: " + context.trial().moveNumber());
 		// Start out by creating a new root node if it doesn't exist yet or updating it if needed
 		if (root == null){
 			Trial trial = new Trial(context.game());
@@ -81,18 +78,13 @@ public class NMovesPriorHiddenUCT extends AI{
 		} else if (context.trial().moveNumber() > nMovesPrior){
             // We set the root to a past at distance nMovesPrior
             // The root is supposed to only be at one or three move in the past depending on if it is a pass move or not
-            if (context.trial().moveNumber() % 2 == 0){
-                // We are at a normal move
-                System.out.println("Update root at a normal move");
-                root = goTo(root, realMoves.get(root.context.trial().moveNumber()));
-                root = goTo(root, realMoves.get(root.context.trial().moveNumber()));
-            } else {
-                // We are at a pass move
-                System.out.println("Update root at a pass move");
-                root = goTo(root, realMoves.get(root.context.trial().moveNumber()));
-            }
+			for (int i = 0; i < context.trial().moveNumber() - nMovesPrior - root.context.trial().moveNumber(); i++){
+				System.out.println(i);
+				root = goTo(root, realMoves.get(root.context.trial().moveNumber()));
+			}
         } 
 		
+		System.out.println("Number of moves : " + root.context.trial().moveNumber());
 		// We'll respect any limitations on max seconds and max iterations (don't care about max depth)
 		final long stopTime = (maxSeconds > 0.0) ? System.currentTimeMillis() + (long) (maxSeconds * 1000L) : Long.MAX_VALUE;
 		final int maxIts = (maxIterations >= 0) ? maxIterations : Integer.MAX_VALUE;
@@ -114,7 +106,7 @@ public class NMovesPriorHiddenUCT extends AI{
 			}
 			Context realContext = new Context(root.context);
 			
-			int nbMoves = 0;
+			int nbMoves = root.context.trial().moveNumber();
 			// Traverse tree
 			while (true)
 			{
